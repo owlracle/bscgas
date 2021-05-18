@@ -80,8 +80,10 @@ const wallet = {
         return new Promise(resolve => {
             this.img = new Image();
             const url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=`;
-            elem.querySelector('#wallet').innerHTML = this.address;
-    
+
+            this.shortAddress = `${this.address.slice(0,6)}...${this.address.slice(-4)}`;
+            elem.querySelector('#wallet').innerHTML = `<span class="long">${this.address}</span><span class="short">${this.shortAddress}</span>`;
+
             this.img.src = `${url}${this.address}`;
     
             this.img.onload = () => {
@@ -117,7 +119,7 @@ const wallet = {
         fog.querySelector('div').addEventListener('click', e => e.stopPropagation());
     
         fog.querySelector('img').src = this.img.src;
-        fog.querySelector('#wallet').innerHTML = `${this.address.slice(0,6)}...${this.address.slice(-4)}`;
+        fog.querySelector('#wallet').innerHTML = this.shortAddress;
     
         fog.querySelector('#wallet-container').addEventListener('click', () => this.copyAddress());
 
@@ -225,22 +227,32 @@ document.querySelectorAll('.gas i').forEach((e,i) => {
 // update gas prices every 10s
 
 const gasTimer = {
+    interval: 10000,
+    toInterval: 100,
     counter: 100,
     element: document.querySelector('#countdown #filled'),
+
+    init: function(interval, toInterval){
+        this.interval = interval;
+        this.toInterval = toInterval;
+        this.counter = interval / toInterval;
+
+        this.countDown();
+    },
 
     countDown: function() {
         setTimeout(() => {
             this.counter--;
-            this.element.style.width = `${this.counter}%`;
+            this.element.style.width = `${this.counter / (this.interval / this.toInterval) * 100}%`;
         
             if (this.counter <= 0){
-                this.counter = 100;
+                this.counter = this.interval / this.toInterval;
                 this.update().then(() => this.countDown());
             }
             else {
                 this.countDown();
             }
-        }, 100);
+        }, this.toInterval);
     },
 
     update: async function() {
@@ -254,7 +266,7 @@ const gasTimer = {
         return data;    
     }
 };
-gasTimer.countDown();
+gasTimer.init(30000, 100);
 
 gasTimer.update().then(data => {
     const formatted = `{

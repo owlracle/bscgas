@@ -4,10 +4,7 @@ const request = require('request');
 const app = express();
 const port = 4200;
 
-app.use(express.urlencoded({
-    extended: true
-}));
-
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
