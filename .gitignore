@@ -1,0 +1,8 @@
+.conf
+.vscode
+.bash_logout
+.bash_profile
+.bashrc
+cwp_stats
+tmp
+node_modules

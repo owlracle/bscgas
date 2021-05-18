@@ -1,0 +1,151 @@
+<!-- TODO: -->
+<!-- contas nas redes sociais -->
+<!-- modo dark/light -->
+<!-- cookies pra salvar preferencia de tema -->
+<!-- versão responsiva -->
+
+<!DOCTYPE html>
+<html lang="en">
+<title>BSC Gas Oracle</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="shortcut icon" href="img/favicon.ico">
+
+<script src="https://kit.fontawesome.com/c1a16f97ec.js" crossorigin="anonymous"></script>
+<script type="module" src="js/index.js" async></script>
+
+<link rel="stylesheet" href="css/index.css">
+
+<body class="dark">
+    <header>
+        <div class="col">
+            <a id="logo" href="/"><img src="img/logo.png"></a>
+            <div id="price">BNB: $<span id="now">000.00</span> <span id="color" class="green">(<span id="before">+0.00</span>%)</span></div>
+            <a id="buy-bnb" href="https://www.binance.com/en/register?ref=88450796" target="_blank"><img
+                    src="https://public.bnbstatic.com/static/images/common/favicon.ico">Buy BNB</a>
+        </div>
+        <div class="col">
+            <div id="theme"><i class="fas fa-sun"></i></div>
+            <div id="search">
+                <input placeholder="Search by Address / Txn Hash / Block / Token on Bscscan">
+                <button><i class="fas fa-search"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <div id="frame">
+        <h2>Binance Smart Chain</h2>
+        <h1><img src="img/logo.png"> Gas Price Oracle</h1>
+
+        <p>This tool attemps to predict the gas price to be paid on Binance Smart Chain by averaging recent past transactions.
+            Take into consideration that numbers shown here are just estimations.</p>
+
+        <p>Right now, submitting transactions on BSC network should cost:</p>
+
+        <div id="gas-container">
+            <div class="gas">
+                <div class="title">Slow <i class="far fa-question-circle"></i></div>
+                <div class="body">0 GWei</div>
+            </div>
+            <div class="gas">
+                <div class="title">Standard <i class="far fa-question-circle"></i></div>
+                <div class="body">0 GWei</div>
+            </div>
+            <div class="gas">
+                <div class="title">Fast <i class="far fa-question-circle"></i></div>
+                <div class="body">0 GWei</div>
+            </div>
+            <div class="gas">
+                <div class="title">Instant <i class="far fa-question-circle"></i></div>
+                <div class="body">0 GWei</div>
+            </div>
+        </div>
+
+        <div id="countdown-container">
+            <span>Refreshing in</span>
+            <div id="countdown"><div id="filled"></div></div>
+        </div>
+
+        <h2>API endpoint</h2>
+
+        <p>You could also retrieve the gas price estimations through our API endpoint:</p>
+
+        <pre class="code"><code><a href="https://bscgas.info/gas" target="_blank">https://bscgas.info/gas</a></code></pre>
+
+        <p>The endpoint will answer with a <b>json string</b> with the following format:</p>
+
+        <pre class="code"><code>{
+    <span class="json key">"timestamp"</span>: <span class="json string">string</span>,
+    <span class="json key">"slow"</span>: <span class="json number">number</span>,
+    <span class="json key">"standard"</span>: <span class="json number">number</span>,
+    <span class="json key">"fast"</span>: <span class="json number">number</span>,
+    <span class="json key">"imediate"</span>: <span class="json number">number</span>
+}</code></pre>
+
+        <p>Timestamp is an <a href="https://www.w3.org/TR/NOTE-datetime">ISO 8601</a> compliant date. All other response
+            fields are numbers representing the estimated <b>GWei</b> needed to send a transaction for the given
+            speed.</p>
+
+        <p class="quote">Note that if you plan to integrate this API with your application using the <a
+                href="https://github.com/ChainSafe/web3.js" target="_blank">web3</a> library you
+            must multiply the value by <code class="code inline">1000000000</code> as the library expects the gas price
+            in Wei.</p>
+
+        <p>A sample response (fetched on page load) is provided below:</p>
+
+        <pre class="code"><code id="sample"><i class="fas fa-spin fa-cog"></i></code></pre>
+
+        <h2>Credits</h2>
+
+        <p>The backend oracle software providing the gas prices for this website is forked from <a
+            href="https://github.com/JustLiquidity/Gas-Station-BinanceSmartChain" target="_blank">JustLiquidity
+            </a>, which itself is a fork from <a href="https://github.com/ethgasstation/gasstation-express-oracle"
+            target="_blank">ethgasstation</a>. All credit to the authors.</p>
+
+        <h2>Donations</h2>
+
+        <p>If you liked this website, or if you find the public API endpoint useful in any way, please consider <a
+                id="donate-link">buying me a coffee</a>. It helps paying for the domain, keeps the server running 24/7 and reward my time. Thank you!</p>
+
+    </div>
+
+    <footer>
+        <div class="row">
+            <div class="col resources">
+                <div class="title">Resources</div>
+
+                <a class="item" href="https://bscscan.com/" target="_blank"><img
+                        src="https://bscscan.com//images/favicon.ico"><span>BSC scan</span><span class="gray">(BSC block
+                        explorer)</span></a>
+                <a class="item" href="https://www.binance.com/" target="_blank"><img
+                        src="https://public.bnbstatic.com/static/images/common/favicon.ico"><span>Binance</span><span
+                        class="gray">(Buy BNB with fiat)</span></a>
+                <a class="item" href="https://pancakeswap.finance/" target="_blank"><img
+                        src="https://pancakeswap.finance//favicon.ico"><span>Pancakeswap</span><span class="gray">(Dex
+                        exchange)</span></a>
+                <a class="item" href="https://www.beefy.finance/" target="_blank"><img
+                        src="https://beefy.finance/favicon.ico"><span>Beefy.finance</span><span class="gray">(BSC yield
+                        farming)</span></a>
+            </div>
+            <div class="col">
+                <div class="row title">Social</div>
+                <div class="row social">
+                    <div class="item"><a href="#" target="_blank"><i class="fab fa-github"></i></a></div>
+                    <div class="item"><a href="#" target="_blank"><i class="fab fa-twitter"></i></a></div>
+                    <div class="item"><a href="#" target="_blank"><i class="fab fa-telegram-plane"></i></a></div>
+                </div>
+            </div>
+        </div>
+        <div id="donate-container" class="row">
+            <div id="donate" class="disabled">
+                <span>Donate BNB (BSC):</span>
+                <span id="wallet"></span>
+                <i class="fas fa-qrcode"></i>
+            </div>
+        </div>
+    </footer>
+
+</body>
+
+</html>
