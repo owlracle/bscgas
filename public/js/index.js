@@ -43,17 +43,40 @@ const cookies = {
     }
 };
 
+
 // change theme dark/light
 
-let theme = cookies.get('theme') || 'dark';
-document.body.classList.add(theme);
+const theme = {
+    options: ['dark', 'light'],
+    icons: {
+        dark: 'sun',
+        light: 'moon'
+    },
+    choice: 'dark',
 
-document.querySelector('#theme').addEventListener('click' , () => {
-    document.body.classList.remove(theme);
-    theme = theme == 'dark' ? 'light' : 'dark';
-    document.body.classList.add(theme);
-    cookies.set('theme', theme, { expires: { days: 365 } });
-});
+    set: function(name){
+        if (this.options.includes(name)){
+            document.body.classList.remove(this.choice);
+            document.body.classList.add(name);
+            this.choice = name;
+            cookies.set('theme', name, { expires: { days: 365 } });
+            document.querySelector('header #theme').innerHTML = `<i class="fas fa-${this.icons[name]}"></i>`;
+        }
+    },
+
+    load: function() {
+        this.set(cookies.get('theme') || this.choice);
+    },
+
+    toggle: function() {
+        const index = this.options.indexOf(this.choice);
+        const next = this.options[ (index + 1) % this.options.length ];
+        this.set(next);
+    },
+};
+
+theme.load();
+document.querySelector('#theme').addEventListener('click' , () => theme.toggle());
 
 
 // fetch bnb price from binance and update the pages's ticker
