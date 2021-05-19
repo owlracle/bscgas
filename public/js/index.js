@@ -1,12 +1,58 @@
+// set the cookie utils object
+
+const cookies = {
+    set: function(key, value, {expires, path}={}) {
+        if (!expires){
+            expires = 86400000;
+        }
+        if (!path){
+            path = '/';
+        }
+
+        let expTime = 0;
+        if (typeof expires === "object"){
+            expTime += (expires.seconds * 1000) || 0;
+            expTime += (expires.minutes * 1000 * 60) || 0;
+            expTime += (expires.hours * 1000 * 60 * 60) || 0;
+            expTime += (expires.days * 1000 * 60 * 60 * 24) || 0;
+        }
+        else {
+            expTime = expires;
+        }
+
+        const now = new Date();
+        expTime = now.setTime(now.getTime() + expTime);
+
+        const cookieString = `${key}=${value};expires=${new Date(expTime).toUTCString()};path=${path}`;
+        document.cookie = cookieString;
+        return cookieString;
+    },
+
+    get: function(key) {
+        const cookies = document.cookie.split(';').map(e => e.trim());
+        const match = cookies.filter(e => e.split('=')[0] == key);
+        return match.length ? match[0].split('=')[1] : false;
+    },
+
+    delete: function(key) {
+        const cookies = document.cookie.split(';').map(e => e.trim());
+        const match = cookies.filter(e => e.split('=')[0] == key);
+
+        document.cookie = `${key}=0;expires=${new Date().toUTCString()}`;
+        return match.length > 0;
+    }
+};
 
 // change theme dark/light
 
-let theme = 'dark';
+let theme = cookies.get('theme') || 'dark';
+document.body.classList.add(theme);
 
 document.querySelector('#theme').addEventListener('click' , () => {
     document.body.classList.remove(theme);
     theme = theme == 'dark' ? 'light' : 'dark';
     document.body.classList.add(theme);
+    cookies.set('theme', theme, { expires: { days: 365 } });
 });
 
 
