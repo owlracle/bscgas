@@ -1,41 +1,55 @@
-<!-- TODO: -->
-<!-- ajustar readme.md -->
-<!-- adsense -->
-<!-- SEO -->
-
 <!DOCTYPE html>
 <html lang="en">
-<title>BSC Gas Oracle</title>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<head>
+    <title>BSC Gas Oracle</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<link rel="shortcut icon" href="img/favicon.ico">
+    <meta name="description" content="Binance Smart Chain gas price oracle.">
+    <meta name="keywords" content="binance, BNB, binance smart chain, crypto, bitcoin, ETH, defi, gas, gas fee, oracle, bsc, bsc gas api">
+    <meta name="”robots”" content="index, follow">
+    <meta property="og:image" content="https://bscgas.info/img/logo.png">
+    <meta property="og:title" content="bscgas.info" />
+    <meta property="og:url" content="https://bscgas.info/" />
+    <meta property="og:description" content="Binance Smart Chain gas price oracle.">
+    <meta property="og:site_name" content="bscgas.info">
+    <meta name="twitter:image" content="https://bscgas.info/img/logo.png">
+    <meta name="twitter:description" content="Binance Smart Chain gas price oracle.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="bscgas.info" />
+    <meta name="twitter:url" content="https://bscgas.info/" />
 
-<script src="https://kit.fontawesome.com/c1a16f97ec.js" crossorigin="anonymous"></script>
-<script type="module" src="js/index.js" async></script>
+    
+    <link rel="shortcut icon" href="img/favicon.ico">
+    
+    <script src="https://kit.fontawesome.com/c1a16f97ec.js" crossorigin="anonymous" async></script>
+    <script type="module" src="js/index.js" async></script>
+    
+    <link rel="stylesheet" href="css/index.css">
 
-<link rel="stylesheet" href="css/index.css">
+    <script data-ad-client="ca-pub-8017034338869924" async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+</head>
 
 <body>
     <header>
         <div class="col">
-            <a id="logo" href="/"><img src="img/logo.png"></a>
+            <a id="logo" href="/"><img src="img/logo.png" alt="Bscgas logo"></a>
             <div id="price"><div>BNB: $<span id="now">000.00</span></div><span id="color" class="green">(<span id="before">+0.00</span>%)</span></div>
-            <a id="buy-bnb" href="https://www.binance.com/en/register?ref=88450796" target="_blank"><img
-                    src="https://public.bnbstatic.com/static/images/common/favicon.ico">Buy BNB</a>
+            <a id="buy-bnb" href="https://www.binance.com/en/register?ref=88450796" target="_blank" rel="noopener"><img
+                    src="https://public.bnbstatic.com/static/images/common/favicon.ico" alt="binance logo">Buy BNB</a>
         </div>
         <div class="col">
             <div id="theme"></div>
             <div id="search">
                 <input placeholder="Search by Address / Txn Hash / Block / Token on Bscscan">
-                <button><i class="fas fa-search"></i></button>
+                <button aria-label="Bscscan search"><i class="fas fa-search"></i></button>
             </div>
         </div>
     </header>
 
     <div id="frame">
         <h2>Binance Smart Chain</h2>
-        <h1><img src="img/logo.png"> Gas Price Oracle</h1>
+        <h1><img src="img/logo.png" alt="Bscgas logo"> Gas Price Oracle</h1>
 
         <p>This tool attemps to predict the gas price to be paid on Binance Smart Chain by averaging recent past transactions.
             Take into consideration that numbers shown here are just estimations.</p>
@@ -87,7 +101,7 @@
             speed.</p>
 
         <p class="quote">Note that if you plan to integrate this API with your application using the <a
-                href="https://github.com/ChainSafe/web3.js" target="_blank">web3</a> library you
+                href="https://github.com/ChainSafe/web3.js" target="_blank" rel="noopener">web3</a> library you
             must multiply the value by <code class="code inline">1000000000</code> as the library expects the gas price
             in Wei.</p>
 
@@ -98,9 +112,9 @@
         <h2>Credits</h2>
 
         <p>The backend oracle software providing the gas prices for this website is forked from <a
-            href="https://github.com/JustLiquidity/Gas-Station-BinanceSmartChain" target="_blank">JustLiquidity
+            href="https://github.com/JustLiquidity/Gas-Station-BinanceSmartChain" target="_blank" rel="noopener">JustLiquidity
             </a>, which itself is a fork from <a href="https://github.com/ethgasstation/gasstation-express-oracle"
-            target="_blank">ethgasstation</a>. All credit to the authors.</p>
+            target="_blank" rel="noopener">ethgasstation</a>. All credit to the authors.</p>
 
         <h2>Donations</h2>
 
@@ -110,8 +124,8 @@
         <h2>Feedback</h2>
                 
         <p>Don't want or can't donate. No problem! You can help us by providing your feedback. In case there is something wrong,
-            missing, or you wish to see here, just reach us on our <a href="https://twitter.com/bscgas" target="_blank">twitter</a> page or <a
-            href="https://t.me/bscgas_info" target="_blank">telegram</a> group.</p>
+            missing, or you wish to see here, just reach us on our <a href="https://twitter.com/bscgas" target="_blank" rel="noopener">twitter</a> page or <a
+            href="https://t.me/bscgas_info" target="_blank" rel="noopener">telegram</a> group.</p>
     </div>
 
     <footer>
@@ -119,25 +133,25 @@
             <div class="col resources">
                 <div class="title">Resources</div>
 
-                <a class="item" href="https://bscscan.com/" target="_blank"><img
-                        src="https://bscscan.com//images/favicon.ico"><span>BSC scan</span><span class="gray">(BSC block
+                <a class="item" href="https://bscscan.com/" target="_blank" rel="noopener"><img
+                        src="https://bscscan.com//images/favicon.ico" alt="bscscan logo"><span>BSC scan</span><span class="gray">(BSC block
                         explorer)</span></a>
-                <a class="item" href="https://www.binance.com/" target="_blank"><img
-                        src="https://public.bnbstatic.com/static/images/common/favicon.ico"><span>Binance</span><span
+                <a class="item" href="https://www.binance.com/" target="_blank" rel="noopener"><img
+                        src="https://public.bnbstatic.com/static/images/common/favicon.ico" alt="binance logo"><span>Binance</span><span
                         class="gray">(Buy BNB with fiat)</span></a>
-                <a class="item" href="https://pancakeswap.finance/" target="_blank"><img
-                        src="https://pancakeswap.finance//favicon.ico"><span>Pancakeswap</span><span class="gray">(Dex
+                <a class="item" href="https://pancakeswap.finance/" target="_blank" rel="noopener"><img
+                        src="https://pancakeswap.finance//favicon.ico" alt="pancakeswap logo"><span>Pancakeswap</span><span class="gray">(Dex
                         exchange)</span></a>
-                <a class="item" href="https://www.beefy.finance/" target="_blank"><img
-                        src="https://beefy.finance/favicon.ico"><span>Beefy.finance</span><span class="gray">(BSC yield
+                <a class="item" href="https://www.beefy.finance/" target="_blank" rel="noopener"><img
+                        src="https://beefy.finance/favicon.ico" alt="beefy finance logo"><span>Beefy.finance</span><span class="gray">(BSC yield
                         farming)</span></a>
             </div>
             <div class="col">
                 <div class="row title">Social</div>
                 <div class="row social">
-                    <div class="item"><a href="https://github.com/werlang/bscgas" target="_blank"><i class="fab fa-github"></i></a></div>
-                    <div class="item"><a href="https://twitter.com/bscgas" target="_blank"><i class="fab fa-twitter"></i></a></div>
-                    <div class="item"><a href="https://t.me/bscgas_info" target="_blank"><i class="fab fa-telegram-plane"></i></a></div>
+                    <div class="item"><a href="https://github.com/werlang/bscgas" target="_blank" aria-label="github" rel="noopener"><i class="fab fa-github"></i></a></div>
+                    <div class="item"><a href="https://twitter.com/bscgas" target="_blank" aria-label="twitter" rel="noopener"><i class="fab fa-twitter"></i></a></div>
+                    <div class="item"><a href="https://t.me/bscgas_info" target="_blank" aria-label="telegram" rel="noopener"><i class="fab fa-telegram-plane"></i></a></div>
                 </div>
             </div>
         </div>
