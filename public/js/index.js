@@ -284,10 +284,10 @@ class Tooltip {
 // show tooltips for each gas speed card
 
 const tooltipList = [
+    'Around 3 minutes to confirm',
+    'Around 1 minute to confirm',
     'Around 15 seconds to confirm',
-    'Around 15 seconds to confirm',
-    'Around 15 seconds to confirm',
-    'Confirm almost intantly. But at what cost?',
+    'Confirm almost intantly',
 ];
 document.querySelectorAll('.gas i').forEach((e,i) => {
     new Tooltip(e, tooltipList[i]);
