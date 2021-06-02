@@ -1,5 +1,6 @@
 const express = require('express');
 const request = require('request');
+const cors = require('cors');
 
 const app = express();
 const port = 4200;
@@ -11,7 +12,12 @@ app.get('/', (req, res) => {
     res.sendFile(`public/html/index.html`, { root: __dirname });
 });
 
-app.get('/gas', (req, res) => {
+const corsOptions = {
+    origin: '*',
+    optionsSuccessStatus: 200,
+};
+
+app.get('/gas', cors(corsOptions), (req, res) => {
     // request('127.0.0.1:8097').then(resp => resp.json().then(data => {
     request('http://127.0.0.1:8097', (error, response, data) => {
         // sample data: {"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}
