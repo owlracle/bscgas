@@ -1,9 +1,13 @@
 const express = require('express');
 const request = require('request');
 const cors = require('cors');
+const mysql = require('mysql2');
+const fs = require('fs');
 
 const app = express();
-const port = 4200;
+const port = 4201;
+
+const mysqlConnection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '/mysql_config.json')));
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -33,6 +37,10 @@ app.get('/gas', cors(corsOptions), (req, res) => {
                 fast: data.fast,
                 imediate: data.fastest
             };
+
+            const sql = `INSERT INTO api_requests (ip, origin, response) VALUES ('${req.ip}', '${req.hostname}', '${JSON.stringify(resp)}')`;
+            mysqlConnection.query(sql);
+
             res.send(resp);
         }
     });
