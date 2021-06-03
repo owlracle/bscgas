@@ -213,7 +213,7 @@ const wallet = {
     }
 };
 wallet.loadImg(document.querySelector('#donate'));
-wallet.bindModal(document.querySelector('#donate-link'));
+document.querySelectorAll('.donate-link').forEach(e => wallet.bindModal(e));
 
 
 // fade in and out function (work on any element)
