@@ -5,7 +5,14 @@ const mysql = require('mysql2');
 const fs = require('fs');
 
 const app = express();
-const port = 4200;
+let port = 4200;
+
+// receive args
+process.argv.forEach((val, index, array) => {
+    if ((val == '-p' || val == '--port') && array[index+1]){
+        port = array[index+1];
+    }
+});
 
 const mysqlConnection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '/mysql_config.json')));
 
@@ -28,13 +35,18 @@ app.get('/gas', cors(corsOptions), (req, res) => {
         }
         else {
             data = JSON.parse(data);
-            const resp = {
-                timestamp: new Date().toISOString(),
-                slow: data.safeLow,
-                standard: data.standard,
-                fast: data.fast,
-                imediate: data.fastest
-            };
+            const resp = {};
+            resp.timestamp = new Date().toISOString();
+
+            if (data.standard){
+                resp.slow = data.safeLow;
+                resp.standard = data.standard;
+                resp.fast = data.fast;
+                resp.imediate = data.fastest;
+            }
+            else {
+                resp.error = 'Oracle is restarting';
+            }
 
             // save API request to DB for statistics purpose
             try {
@@ -73,16 +85,18 @@ async function buildHistory(){
     if (oracle.data){
         const data = JSON.parse(oracle.data);
 
-        try {
-            mysqlConnection.execute(`INSERT INTO price_history (imediate, fast, standard, slow) VALUES (?, ?, ?, ?)`, [
-                data.fastest,
-                data.fast,
-                data.standard,
-                data.safeLow,
-            ]);
-        }
-        catch(err) {
-            console.log(err);
+        if (data.standard){
+            try {
+                mysqlConnection.execute(`INSERT INTO price_history (imediate, fast, standard, slow) VALUES (?, ?, ?, ?)`, [
+                    data.fastest,
+                    data.fast,
+                    data.standard,
+                    data.safeLow,
+                ]);
+            }
+            catch(err) {
+                console.log(err);
+            }
         }
     }
 

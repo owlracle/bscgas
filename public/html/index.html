@@ -78,6 +78,8 @@
             <div id="countdown"><div id="filled"></div></div>
         </div>
 
+        <p class="quote">Most of the time prices are <b>5 GWei</b> for all speeds. If you came from Ethereum network, you may find this a little odd. But rest assured, it is just the way BSC works. Our oracle is working just fine.</p>
+
         <h2>API endpoint</h2>
 
         <p>You could also retrieve the gas price estimations through our API endpoint:</p>
@@ -106,6 +108,14 @@
         <p>A sample response (fetched on page load) is provided below:</p>
 
         <pre class="code"><code id="sample"><i class="fas fa-spin fa-cog"></i></code></pre>
+
+        <p>In case the backend oracle is restarting (it does from time to time), the resquest return an error field as well as the timestamp:</p>
+
+        <pre class="code"><code>{
+    <span class="json key">"timestamp"</span>: <span class="json string">string</span>,
+    <span class="json key">"error"</span>: <span class="json string">"Oracle is restarting"</span>
+}</code></pre>
+        
 
         <h2>Sample Code</h2>
 
@@ -182,7 +192,6 @@
 </html>
 
 <!-- TODO: -->
-<!-- Collect information on the server to feed a historical gas price data -->
-<!-- Track API calls to make statistics -->
+<!-- Plot historical gas price data -->
 <!-- When we get a decent amount of API calls, ask for partners for ads -->
 <!-- When API calls get a problem, implement a quota -->

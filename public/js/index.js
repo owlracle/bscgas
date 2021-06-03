@@ -327,11 +327,16 @@ const gasTimer = {
     update: async function() {
         const data = await (await fetch('/gas')).json();
         const speedList = ['slow', 'standard', 'fast', 'imediate'];
-        document.querySelectorAll('.gas .body').forEach((e,i) => {
-            if (data[speedList[i]]){
-                e.innerHTML = `${data[speedList[i]]} GWei`;
-            }
-        });
+        if (data.error){
+            console.log(data.error);
+        }
+        else{
+            document.querySelectorAll('.gas .body').forEach((e,i) => {
+                if (data[speedList[i]]){
+                    e.innerHTML = `${data[speedList[i]]} GWei`;
+                }
+            });
+        }
         return data;    
     }
 };
