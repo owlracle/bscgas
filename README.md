@@ -6,4 +6,4 @@ Our server runs an oracle that scans the last hundred transactions on BSC and re
 
 This repo contains the frontend website for https://bscgas.info as well as the [API endpoint](https://bscgas.info/gas) exposing the oracle's data in json format:
 
-```{"timestamp":"2021-05-20T04:28:00.465Z","slow":5,"standard":5,"fast":6,"imediate":10}```
+```{"timestamp":"2021-05-20T04:28:00.465Z","slow":5,"standard":5,"fast":6,"instant":10}```

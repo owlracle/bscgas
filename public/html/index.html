@@ -47,7 +47,7 @@
 
     <div id="frame">
         <h2>Binance Smart Chain</h2>
-        <h1><img src="img/logo.png" alt="Bscgas logo"> Gas Price Forecast</h1>
+        <h1><img src="img/logo.png" alt="Bscgas logo"> Gas Price Forecast <span id="time-sign"></span></h1>
 
         <p>This tool attemps to predict the gas price to be paid on Binance Smart Chain by averaging recent past transactions.
             Take into consideration that numbers shown here are just estimations.</p>
@@ -93,16 +93,24 @@
     <span class="json key">"slow"</span>: <span class="json number">number</span>,
     <span class="json key">"standard"</span>: <span class="json number">number</span>,
     <span class="json key">"fast"</span>: <span class="json number">number</span>,
-    <span class="json key">"imediate"</span>: <span class="json number">number</span>
+    <span class="json key">"instant"</span>: <span class="json number">number</span>
+    <span class="json key">"block_time"</span>: <span class="json number">number</span>
+    <span class="json key">"last_block"</span>: <span class="json number">number</span>
 }</code></pre>
 
-        <p>Timestamp is an <a href="https://www.w3.org/TR/NOTE-datetime">ISO 8601</a> compliant date. All other response
-            fields are numbers representing the estimated <b>GWei</b> needed to send a transaction for the given
-            speed.</p>
-
+        <ul>
+            <li><code class="code inline">timestamp</code>: An <a href="https://www.w3.org/TR/NOTE-datetime">ISO 8601</a> compliant date for when the API returned the result.</li>
+            <li><code class="code inline">slow</code>: Estimated minimum Gwei to be paid for a transaction that will be safely accepted. This means it can take a while (usually about half an hour).</li>
+            <li><code class="code inline">standard</code>: Estimated gwei paid recently where the transaction was accepted on 60% of the blocks.  It usually take about a minute.</li>
+            <li><code class="code inline">fast</code>: Estimated gwei paid recently where the transaction was accepted on 90% of the blocks. It usually take about 15 seconds.</li>
+            <li><code class="code inline">instant</code>: Estimated gwei needed for the transaction be accepted in the next block. Usually this means you are overpaying.</li>
+            <li><code class="code inline">block_time</code>: Average time between each block confirmation.</li>
+            <li><code class="code inline">last_block</code>: Number of the last block the oracle scanned.</li>
+        </ul> 
+        
         <p class="quote">Note that if you plan to integrate this API with your application using the <a
                 href="https://github.com/ChainSafe/web3.js" target="_blank" rel="noopener">web3</a> library you
-            must multiply the value by <code class="code inline">1000000000</code> as the library expects the gas price
+            must multiply the value by <code class="code inline">1<sup>9</sup></code> as the library expects the gas price
             in Wei.</p>
 
         <p>A sample response (fetched on page load) is provided below:</p>
@@ -193,5 +201,7 @@
 
 <!-- TODO: -->
 <!-- Plot historical gas price data -->
+<!-- Retrieve gas paid so we can estimate cost in bnb/usd per transaction -->
 <!-- When we get a decent amount of API calls, ask for partners for ads -->
 <!-- When API calls get a problem, implement a quota -->
+<!-- Public API endpoint only for this domain. CORS and ip limited. Max 10 calls/min-->

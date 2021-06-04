@@ -55,6 +55,14 @@ body {
             }
         }
 
+        ul {
+            list-style: none;
+
+            li {
+                margin-bottom: 7px;
+            }
+        }
+
         .quote {
             margin-left: 20px;
             padding: 5px 0 5px 10px;
@@ -78,6 +86,16 @@ body {
                 @media @size-600 {
                     margin-right: 20px;
                 }
+            }
+
+            #time-sign {
+                height: 15px;
+                width: 15px;
+                display: inline-block;
+                border-radius: 100%;
+                margin-left: 15px;
+                transition: 3s background;
+                box-shadow: 0 0 5px #2c2c2c inset;
             }
         }
 
@@ -579,6 +597,10 @@ body {
         border: 1px solid var(--text-intense-color);
         pointer-events: none;
         box-shadow: 0px 0px 3px var(--text-color);
+        font-size: 1rem;
+        text-shadow: none;
+        font-weight: normal;
+        cursor: help;
     }
 
     #countdown-container {

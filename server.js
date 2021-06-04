@@ -42,7 +42,9 @@ app.get('/gas', cors(corsOptions), (req, res) => {
                 resp.slow = data.safeLow;
                 resp.standard = data.standard;
                 resp.fast = data.fast;
-                resp.imediate = data.fastest;
+                resp.instant = data.fastest;
+                resp.block_time = data.block_time;
+                resp.last_block = data.blockNum;
             }
             else {
                 resp.error = 'Oracle is restarting';
@@ -87,7 +89,7 @@ async function buildHistory(){
 
         if (data.standard){
             try {
-                mysqlConnection.execute(`INSERT INTO price_history (imediate, fast, standard, slow) VALUES (?, ?, ?, ?)`, [
+                mysqlConnection.execute(`INSERT INTO price_history (instant, fast, standard, slow) VALUES (?, ?, ?, ?)`, [
                     data.fastest,
                     data.fast,
                     data.standard,

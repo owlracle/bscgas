@@ -218,19 +218,31 @@ document.querySelectorAll('.donate-link').forEach(e => wallet.bindModal(e));
 
 // fade in and out function (work on any element)
 
-function fadeIn(elem, time=300){
-    elem.style.transition = `${time/1000}s opacity`;
-    elem.style.opacity = '0';
-
-    setTimeout(() => elem.style.opacity = '1', 1);
-    setTimeout(() => elem.removeAttribute('style'), time + 100);
+async function fadeIn(elem, time=300){
+    return new Promise(resolve => {
+        const oldStyle = elem.getAttribute('style');
+        elem.style.transition = `${time/1000}s opacity`;
+        elem.style.opacity = '0';
+    
+        setTimeout(() => elem.style.opacity = '1', 1);
+        setTimeout(() => {
+            elem.removeAttribute('style');
+            elem.style = oldStyle;
+            resolve(true);
+        }, time + 100);
+    });
 }
 
-function fadeOut(elem, time=300){
-    elem.style.transition = `${time/1000}s opacity`;
-
-    setTimeout(() => elem.style.opacity = '0', 1);
-    setTimeout(() => elem.remove(), time + 100);
+async function fadeOut(elem, time=300){
+    return new Promise(resolve => {
+        elem.style.transition = `${time/1000}s opacity`;
+        
+        setTimeout(() => elem.style.opacity = '0', 1);
+        setTimeout(() => {
+            elem.remove();
+            resolve(true);
+        }, time + 100);
+    });
 }
 
 
@@ -245,8 +257,8 @@ class Tooltip {
         this.parent = parent;
         this.text = text;
 
-        this.parent.addEventListener(createEvent, () => {
-            this.create();
+        this.parent.addEventListener(createEvent, e => {
+            this.create(e);
 
             if (timeout){
                 setTimeout(() => this.kill(), timeout);
@@ -261,11 +273,14 @@ class Tooltip {
         return this;
     }
 
-    create() {
+    create(event) {
+        // console.log(event);
         const tooltip = document.createElement('div');
         this.element = tooltip;
         tooltip.classList.add('tooltip');
         tooltip.innerHTML = this.text;
+        tooltip.style.top = `${event.y}px`;
+        tooltip.style.left = `${event.x}px`;
 
         document.querySelectorAll('.tooltip').forEach(e => e.remove());
 
@@ -277,6 +292,10 @@ class Tooltip {
         if (this.element){
             fadeOut(this.element, 200);
         }
+    }
+
+    setText(text) {
+        this.text = text;
     }
 }
 
@@ -325,8 +344,11 @@ const gasTimer = {
     },
 
     update: async function() {
+        const startTime = new Date();
         const data = await (await fetch('/gas')).json();
-        const speedList = ['slow', 'standard', 'fast', 'imediate'];
+        const requestTime = new Date() - startTime;
+
+        const speedList = ['slow', 'standard', 'fast', 'instant'];
         if (data.error){
             console.log(data.error);
         }
@@ -336,6 +358,8 @@ const gasTimer = {
                     e.innerHTML = `${data[speedList[i]]} GWei`;
                 }
             });
+
+            setColorGradient(document.querySelector('#time-sign'), requestTime);
         }
         return data;    
     }
@@ -348,8 +372,25 @@ gasTimer.update().then(data => {
     <span class="json key">"slow"</span>: <span class="json number">${data.slow || 0}</span>,
     <span class="json key">"standard"</span>: <span class="json number">${data.standard || 0}</span>,
     <span class="json key">"fast"</span>: <span class="json number">${data.fast || 0}</span>,
-    <span class="json key">"imediate"</span>: <span class="json number">${data.imediate || 0}</span>
+    <span class="json key">"instant"</span>: <span class="json number">${data.instant || 0}</span>
+    <span class="json key">"block_time"</span>: <span class="json number">${data.block_time || 0}</span>
+    <span class="json key">"last_block"</span>: <span class="json number">${data.last_block || 0}</span>
 }`;
 
     document.querySelector('#sample').innerHTML = formatted;
 });
+
+const tooltipColor = new Tooltip(document.querySelector('#time-sign'), '', { createEvent: 'mouseenter' });
+
+function setColorGradient(elem, time){
+    const maxTime = 10000;
+    const rate = Math.min(time, maxTime) / maxTime;
+
+    const color = {b: '00', toString: color => '00'.slice(color.toString(16).length) + color.toString(16)};
+    color.r = color.toString(Math.round(rate * 200));
+    color.g = color.toString(Math.round((1 - rate) * 200));
+
+    elem.style['background-color'] = `#${color.r}${color.g}${color.b}`;
+    tooltipColor.setText(`API taking ${(time/1000).toFixed(1)} s to respond`);
+
+}
