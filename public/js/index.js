@@ -303,10 +303,10 @@ class Tooltip {
 // show tooltips for each gas speed card
 
 const tooltipList = [
-    'Around 3 minutes to confirm',
-    'Around 1 minute to confirm',
-    'Around 15 seconds to confirm',
-    'Confirm almost intantly',
+    'Accepted on 35% of blocks',
+    'Accepted on 60% of blocks',
+    'Accepted on 90% of blocks',
+    'Accepted on every block',
 ];
 document.querySelectorAll('.gas i').forEach((e,i) => {
     new Tooltip(e, tooltipList[i]);

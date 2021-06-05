@@ -6,11 +6,15 @@ const fs = require('fs');
 
 const app = express();
 let port = 4200;
+let saveDB = true;
 
 // receive args
 process.argv.forEach((val, index, array) => {
     if ((val == '-p' || val == '--port') && array[index+1]){
         port = array[index+1];
+    }
+    if ((val == '-ns' || val == '--not-save')){
+        saveDB = false;
     }
 });
 
@@ -66,6 +70,56 @@ app.get('/gas', cors(corsOptions), (req, res) => {
     });
 });
 
+app.get('/history', cors(corsOptions), async (req, res) => {
+    const listTimeframes = {
+        '10m': 10,
+        '30m': 30,
+        '1h': 60,
+        '2h': 120,
+        '4h': 240,
+        '1d': 1440,
+    };
+
+    const timeframe = Object.keys(listTimeframes).includes(req.query.timeframe) ? listTimeframes[req.query.timeframe] : 
+        (Object.values(listTimeframes).map(e => e.toString()).includes(req.query.timeframe) ? req.query.timeframe : 30);
+
+    const candles = Math.max(Math.min(req.query.candles || 100, 100), 1);
+    const offset = (parseInt(req.query.page) - 1) * candles || 0;
+    const speeds = ['instant', 'fast', 'standard', 'slow'];
+
+    const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
+    
+    const sql = mysqlConnection.format(`SELECT p.timestamp, ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(p.timestamp) BETWEEN '?' AND '?' GROUP BY UNIX_TIMESTAMP(p.timestamp) DIV ? ORDER BY p.timestamp DESC LIMIT ? OFFSET ?`, [
+        req.query.from || 0,
+        req.query.to || new Date().getTime() / 1000,
+        timeframe * 60,
+        candles,
+        offset,
+    ]);
+    mysqlConnection.execute(sql, (err, rows) => {
+        // res.send(sql);
+        if (err){
+            res.send(err);
+        }
+        else {
+            const fields = ['open', 'close', 'low', 'high'];
+
+            rows = rows.map(row => {
+                const tempRow = Object.fromEntries(speeds.map(speed => 
+                    [speed, Object.fromEntries(fields.map(field => 
+                        [field, row[`${speed}.${field}`]]
+                    ))]
+                ));
+                tempRow.timestamp = row.timestamp;
+                tempRow.samples = row.samples;
+                return tempRow;
+            });
+
+            res.send(rows);
+        }
+    });
+});
+
 app.use(express.static(__dirname + '/public/'));
 
 app.listen(port, () => {
@@ -104,4 +158,7 @@ async function buildHistory(){
 
     setTimeout(() => buildHistory(), 1000 * 60); // 1 minute
 }
-buildHistory();
+
+if (saveDB){
+    buildHistory();
+}
