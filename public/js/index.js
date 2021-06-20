@@ -44,6 +44,185 @@ const cookies = {
 };
 
 
+const chart = {
+    package: import('https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js'),
+    ready: false,
+    timeframe: 60,
+    page: 1,
+    candles: 1000,
+    lastCandle: new Date().getTime() / 1000,
+    allRead: false,
+
+    init: async function() {
+        await this.package;
+
+        this.obj = LightweightCharts.createChart(document.querySelector('#chart'), {
+            width: 600,
+            height: 300,
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal,
+            },
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: false,
+            },
+        });
+    
+        this.series = {
+            instant: { color: '#ff0000' },
+            fast: { color: '#ff00ff' },
+            standard: { color: '#0000ff' },
+            slow: { color: '#00ff00' },
+        };
+        
+        // set speed buttons behaviour
+        Object.entries(this.series).forEach(([key, value]) => {
+            document.querySelector(`#toggle-container #${key}`).addEventListener('click', async function() {
+                this.classList.toggle('active');
+                value.visible = this.classList.contains('active');
+    
+                if (value.series){
+                    value.series.applyOptions({
+                        visible: value.visible
+                    });
+                }
+            });
+        });
+    
+        const container = document.querySelector('#chart');
+        const toolTip = document.createElement('div');
+        toolTip.id = 'tooltip-chart';
+        container.appendChild(toolTip);
+    
+        this.obj.subscribeCrosshairMove(param => {
+            const s = Object.keys(this.series).map(e => this.series[e].series);
+            if (param.point === undefined || !param.time || param.point.x < 0 || param.point.x > container.clientWidth || param.point.y < 0 || param.point.y > container.clientHeight) {
+                toolTip.style.display = 'none';
+            }
+            else {
+                toolTip.style.display = 'block';
+    
+                toolTip.innerHTML = Object.keys(this.series).filter(e => this.series[e].visible).map(e => {
+                    const price = param.seriesPrices.get(this.series[e].series);
+                    const key = e.charAt(0).toUpperCase() + e.slice(1);
+                    return `<div class="${key.toLowerCase()}">${key}: ${price}</div>`;
+                }).join('');
+    
+                const coordinateY = container.offsetTop + 10;
+                const coordinateX = container.offsetLeft + 10;
+    
+                toolTip.style.left = `${coordinateX}px`;
+                toolTip.style.top = `${coordinateY}px`;
+            }
+        });
+
+        document.querySelectorAll('#timeframe-switcher button').forEach(b => b.addEventListener('click', async () => {
+            const history = await this.getHistory(b.id.split('tf-')[1]);
+            document.querySelectorAll('#timeframe-switcher button').forEach(e => e.classList.remove('active'));
+            b.classList.add('active')
+            this.update(history);
+
+            document.querySelectorAll(`#toggle-container button`).forEach(b => {
+                const series = this.series[b.id];
+                if (series.visible){
+                    series.series.applyOptions({
+                        visible: series.visible
+                    });
+                }
+            });
+        }));
+
+        this.timeScale = this.obj.timeScale();
+    
+        this.timeScale.subscribeVisibleLogicalRangeChange(async () => {
+            const logicalRange = this.timeScale.getVisibleLogicalRange();
+            if (logicalRange !== null && logicalRange.from < 0 && this.history.length >= this.candles && !this.scrolling && !this.allRead) {
+                this.scrolling = true;
+                const oldHistory = this.history;
+                const newHistory = await this.getHistory(this.timeframe, this.page + 1);
+                this.history = [...oldHistory, ...newHistory];
+
+                this.update(this.history);
+                console.log(this.history);
+                this.page++;
+                this.scrolling = false;
+
+                if (newHistory.length == 0){
+                    this.allRead = true;
+                }
+            }
+        });
+
+        this.ready = true;
+
+        return;
+    },
+
+    update: function(data) {
+        // console.log(data);
+        Object.entries(this.series).forEach(([key, value]) => {
+            const speedData = data.map(e => { return { 
+                value: e[key].high,
+                time: parseInt(new Date(e.timestamp).getTime() / 1000),
+            }}).reverse();
+    
+            // [{ time: '2018-10-19', open: 180.34, high: 180.99, low: 178.57, close: 179.85 },]
+            if (!value.series){
+                value.series = this.obj.addAreaSeries({
+                    lineColor: value.color,
+                    topColor: value.color,
+                    bottomColor: `${value.color}30`,
+                    lineWidth: 2,
+                    visible: false,
+                });
+            }
+            value.series.setData(speedData);
+        });
+    },
+
+    setTheme: function(name) {
+        let background = '#232323';
+        let text = '#e3dcd0';
+        let lines = '#3c3c3c';
+
+        if (name == 'light'){
+            background = '#eeeeee';
+            text = '#511814';
+            lines = '#c9c9c9';
+        }
+
+        this.isReady().then(() => {
+            this.obj.applyOptions({
+                layout: {
+                    backgroundColor: background,
+                    textColor: text,
+                },
+                grid: {
+                    vertLines: { color: lines },
+                    horzLines: { color: lines },
+                },
+                rightPriceScale: { borderColor: lines },
+                timeScale: { borderColor: lines },
+            });
+        });
+    },
+
+    getHistory: async function(timeframe=60, page=1) {
+        this.timeframe = timeframe;
+        this.history = await (await fetch(`/history?timeframe=${timeframe}&page=${page}&candles=${this.candles}&to=${this.lastCandle}`)).json();
+        return this.history;
+    },
+
+    isReady: async function() {
+        return this.ready || new Promise(resolve => setTimeout(() => resolve(this.isReady()), 10));
+    }
+};
+chart.init().then(() => {
+    document.querySelector(`#timeframe-switcher #tf-60`).click();
+    document.querySelector(`#toggle-container #standard`).click();
+});
+
+
 // change theme dark/light
 
 const theme = {
@@ -61,6 +240,7 @@ const theme = {
             this.choice = name;
             cookies.set('theme', name, { expires: { days: 365 } });
             document.querySelector('header #theme').innerHTML = `<i class="fas fa-${this.icons[name]}"></i>`;
+            chart.setTheme(name);
         }
     },
 

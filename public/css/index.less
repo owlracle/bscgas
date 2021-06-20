@@ -103,6 +103,139 @@ body {
             margin-top: 40px;
         }
 
+        h3 {
+            margin-top: 40px;
+            margin-bottom: 30px;
+        }
+
+        #chart-container {
+            display: flex;
+            width: 100%;
+            align-items: center;
+            flex-direction: column;
+
+            #timeframe-switcher {
+                margin-bottom: 10px;
+
+                button {
+                    border: 0;
+                    outline: none;
+                    border-radius: 3px;
+                    border: 2px solid var(--border-color);
+                    background-color: var(--bg-intense-color);
+                    color: var(--text-color);
+                    cursor: pointer;
+                    transition: 0.3s all;
+                    width: 45px;
+
+                    &:hover {
+                        background-color: var(--bg-color);
+                    }
+
+                    &.active {
+                        background-color: var(--text-color);
+                        color: var(--bg-intense-color);
+                    }
+                }
+            }
+
+            #chart {
+                box-shadow: 0 0 15px #74747424;
+                border: 1px solid var(--border-color);
+            }
+
+            #toggle-container {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin-top: 10px;
+
+                button {
+                    background-color: transparent;
+                    outline: none;
+                    border: none;
+                    color: var(--text-color);
+                    display: flex;
+                    align-items: center;
+                    margin: 5px 10px;
+                    height: 25px;
+                    cursor: pointer;
+                    border-radius: 3px;
+                    transition: 0.3s all;
+                    font-size: 1.1rem;
+
+                    &:hover {
+                        background-color: var(--border-color);
+                    }
+
+                    &#instant {
+                        &.active .mark {
+                            background-color: #ff0000cc;
+                        }
+
+                        .mark {
+                            border: 2px solid #ff0000;
+                        }
+                    }
+                    
+                    &#fast {
+                        &.active .mark {
+                            background-color: #ff00ffcc;
+                        }
+
+                        .mark {
+                            border: 2px solid #ff00ff;
+                        }
+                    }
+                    
+                    &#standard {
+                        &.active .mark {
+                            background-color: #0000ffcc;
+                        }
+
+                        .mark {
+                            border: 2px solid #0000ff;
+                        }
+                    }
+                    
+                    &#slow {
+                        &.active .mark {
+                            background-color: #00ff00cc;
+                        }
+
+                        .mark {
+                            border: 2px solid #00ff00;
+                        }
+                    }
+
+                    .mark {
+                        display: flex;
+                        border-radius: 100%;
+                        margin-right: 5px;
+                        height: 10px;
+                        width: 10px;
+                        transition: 0.3s background;
+                    }
+                }
+            }
+
+            #tooltip-chart {
+                width: 100px;
+                position: absolute;
+                background-color: var(--bg-color);
+                color: var(--text-color);
+                z-index: 1;
+                border-radius: 3px;
+                border: 1px solid var(--border-color);
+                padding: 5px 10px 0px;
+                opacity: 0.7;
+
+                div {
+                    margin-bottom: 5px;
+                }
+            }
+        }
+
         #gas-container {
             display: flex;
             justify-content: space-around;

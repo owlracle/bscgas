@@ -83,13 +83,13 @@ app.get('/history', cors(corsOptions), async (req, res) => {
     const timeframe = Object.keys(listTimeframes).includes(req.query.timeframe) ? listTimeframes[req.query.timeframe] : 
         (Object.values(listTimeframes).map(e => e.toString()).includes(req.query.timeframe) ? req.query.timeframe : 30);
 
-    const candles = Math.max(Math.min(req.query.candles || 100, 100), 1);
+    const candles = Math.max(Math.min(req.query.candles || 1000, 1000), 1);
     const offset = (parseInt(req.query.page) - 1) * candles || 0;
     const speeds = ['instant', 'fast', 'standard', 'slow'];
 
     const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
     
-    const sql = mysqlConnection.format(`SELECT p.timestamp, ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(p.timestamp) BETWEEN '?' AND '?' GROUP BY UNIX_TIMESTAMP(p.timestamp) DIV ? ORDER BY p.timestamp DESC LIMIT ? OFFSET ?`, [
+    const sql = mysqlConnection.format(`SELECT p.timestamp, ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(p.timestamp) BETWEEN ? AND ? GROUP BY UNIX_TIMESTAMP(p.timestamp) DIV ? ORDER BY p.timestamp DESC LIMIT ? OFFSET ?`, [
         req.query.from || 0,
         req.query.to || new Date().getTime() / 1000,
         timeframe * 60,
@@ -99,7 +99,8 @@ app.get('/history', cors(corsOptions), async (req, res) => {
     mysqlConnection.execute(sql, (err, rows) => {
         // res.send(sql);
         if (err){
-            res.send(err);
+            res.send({error: err});
+            // res.send({error: err, sql: sql});
         }
         else {
             const fields = ['open', 'close', 'low', 'high'];

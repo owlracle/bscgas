@@ -80,7 +80,29 @@
 
         <p class="quote">Most of the time prices are <b>5 GWei</b> for all speeds. If you came from Ethereum network, you may find this a little odd. But rest assured, it is just the way BSC works. Our oracle is working just fine.</p>
 
-        <h2>API endpoint</h2>
+        <h2>Price history</h2>
+
+        <div id="chart-container">
+            <div id="timeframe-switcher">
+                <button id="tf-10">10m</button>
+                <button id="tf-30">30m</button>
+                <button id="tf-60">1h</button>
+                <button id="tf-120">2h</button>
+                <button id="tf-240">4h</button>
+                <button id="tf-1440">1d</button>
+            </div>
+            <div id="chart"></div>
+            <div id="toggle-container">
+                <button id="slow"><span class="mark"></span>Slow</button>
+                <button id="standard"><span class="mark"></span>Standard</button>
+                <button id="fast"><span class="mark"></span>Fast</button>
+                <button id="instant"><span class="mark"></span>Instant</button>
+            </div>
+        </div>
+
+        <h2>API endpoints</h2>
+
+        <h3 id="endpoint-gas">Gas price estimation</h3>
 
         <p>You could also retrieve the gas price estimations through our API endpoint:</p>
 
@@ -124,6 +146,68 @@
     <span class="json key">"error"</span>: <span class="json string">"Oracle is restarting"</span>
 }</code></pre>
         
+
+        <h3>Gas price history</h3>
+
+        <p>In case you need to retrieve the gas price history, you could fetch the <b>history</b> endpoint:</p>
+
+        <pre class="code"><code><a href="https://bscgas.info/history" target="_blank">https://bscgas.info/history</a></code></pre>
+
+        <p>You could pass the following arguments in a GET request:</p>
+
+        <ul>
+            <li><code class="code inline">from</code>: <a href="https://www.unixtimestamp.com/" target="_blank">Unix timestamp</a> representing the time where your search will start from. <i>Default 0</i>.</li>
+            <li><code class="code inline">to</code>: Unix timestamp representing the time where to finish your search. <i>Default current timestamp</i>.</li>
+            <li><code class="code inline">page</code>: In case your search return more than 1000 candles, you must inform the page of your search you wish to retrieve. <i>Default 1</i>.</li>
+            <li><code class="code inline">candles</code>: How many results (maximum) you wish the search to retrieve. <i>Default 1000</i>.</li>
+            <li><code class="code inline">timeframe</code>: The time you wish to aggregate results to form <a href="https://www.investopedia.com/terms/c/candlestick.asp" target="_blank">candles</a>. The allowed values are <b>10m</b>, <b>30m</b>, <b>1h</b>, <b>2h</b>, <b>4h</b> or <b>1d</b>. You could also inform these values in minutes (10, 30, 60, 120, 240 or 1440). <i>Default 30</i>.</li>
+        </ul> 
+
+        <p>The API will return an array of <a href="https://www.investopedia.com/terms/c/candlestick.asp" target="_blank">candlesticks</a> built from aggregate data of the requested timeframe. The array is ordered fro decreasing timestamps.</p>
+
+        <pre class="code"><code>[
+    {
+        <span class="json key">"instant"</span>: {
+            <span class="json key">"open"</span>: <span class="json number">number</span>,
+            <span class="json key">"close"</span>: <span class="json number">number</span>,
+            <span class="json key">"low"</span>: <span class="json number">number</span>,
+            <span class="json key">"high"</span>: <span class="json number">number</span>,
+        },
+        <span class="json key">"fast"</span>: {
+            <span class="json key">"open"</span>: <span class="json number">number</span>,
+            <span class="json key">"close"</span>: <span class="json number">number</span>,
+            <span class="json key">"low"</span>: <span class="json number">number</span>,
+            <span class="json key">"high"</span>: <span class="json number">number</span>,
+        },
+        <span class="json key">"standard"</span>: {
+            <span class="json key">"open"</span>: <span class="json number">number</span>,
+            <span class="json key">"close"</span>: <span class="json number">number</span>,
+            <span class="json key">"low"</span>: <span class="json number">number</span>,
+            <span class="json key">"high"</span>: <span class="json number">number</span>,
+        },
+        <span class="json key">"slow"</span>: {
+            <span class="json key">"open"</span>: <span class="json number">number</span>,
+            <span class="json key">"close"</span>: <span class="json number">number</span>,
+            <span class="json key">"low"</span>: <span class="json number">number</span>,
+            <span class="json key">"high"</span>: <span class="json number">number</span>,
+        },
+        <span class="json key">"timestamp"</span>: <span class="json string">string</span>,
+        <span class="json key">"samples"</span>: <span class="json number">number</span>
+    },
+
+    ...
+]</code></pre>
+
+        <ul>
+            <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the candlestick time.</li>
+            <li><code class="code inline">samples</code>: Number of samples composing the candle.</li>
+            <li><code class="code inline">instant</code>, <code class="code inline">fast</code>, <code class="code inline">standard</code>, <code class="code inline">slow</code>: Gas price information regarding each speed (check <a href="#endpoint-gas">gas</a> endpoint for explanation about speeds).</li>
+            <li><code class="code inline">open</code>: The gas price reported on the first moment of the candle.</li>
+            <li><code class="code inline">close</code>: The gas price reported on the last moment of the candle.</li>
+            <li><code class="code inline">low</code>: The lowest gas price reported on the entire candle.</li>
+            <li><code class="code inline">high</code>: The highest gas price reported on the entire candle.</li>
+        </ul> 
+
 
         <h2>Sample Code</h2>
 
@@ -200,7 +284,6 @@
 </html>
 
 <!-- TODO: -->
-<!-- Plot historical gas price data -->
 <!-- Retrieve gas paid so we can estimate cost in bnb/usd per transaction -->
 <!-- When we get a decent amount of API calls, ask for partners for ads -->
 <!-- When API calls get a problem, implement a quota -->
