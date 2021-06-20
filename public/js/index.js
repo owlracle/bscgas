@@ -571,6 +571,6 @@ function setColorGradient(elem, time){
     color.g = color.toString(Math.round((1 - rate) * 200));
 
     elem.style['background-color'] = `#${color.r}${color.g}${color.b}`;
-    tooltipColor.setText(`API taking ${(time/1000).toFixed(1)} s to respond`);
+    tooltipColor.setText(`API took ${(time/1000).toFixed(2)}s to respond`);
 
 }
