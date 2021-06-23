@@ -235,12 +235,18 @@ const theme = {
 
     set: function(name){
         if (this.options.includes(name)){
+            const oldName = this.choice;
             document.body.classList.remove(this.choice);
             document.body.classList.add(name);
             this.choice = name;
             cookies.set('theme', name, { expires: { days: 365 } });
             document.querySelector('header #theme').innerHTML = `<i class="fas fa-${this.icons[name]}"></i>`;
             chart.setTheme(name);
+
+            if (oldName != name && window.__CPEmbed){
+                document.querySelector('#codepen').innerHTML = codepenEmbed.split('{{THEME}}').join(name);
+                window.__CPEmbed("#codepen .codepen");
+            }
         }
     },
 
@@ -253,6 +259,10 @@ const theme = {
         const next = this.options[ (index + 1) % this.options.length ];
         this.set(next);
     },
+
+    get: function() {
+        return this.choice;
+    }
 };
 
 theme.load();
@@ -574,3 +584,7 @@ function setColorGradient(elem, time){
     tooltipColor.setText(`API took ${(time/1000).toFixed(2)}s to respond`);
 
 }
+
+const codepenEmbed = `<p class="codepen" data-height="265" data-theme-id="{{THEME}}" data-default-tab="js,result" data-user="pswerlang" data-slug-hash="GRWQzzR" style="height: 265px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid; margin: 1em 0; padding: 1em;" data-pen-title="BSC gas price sample code"><span>See the Pen <a href="https://codepen.io/pswerlang/pen/GRWQzzR">BSC gas price sample code</a> by Pablo (<a href="https://codepen.io/pswerlang">@pswerlang</a>) on <a href="https://codepen.io">CodePen</a>.</span></p>`;
+document.querySelector('#codepen').innerHTML = codepenEmbed.split('{{THEME}}').join(theme.get());
+import('https://cpwebassets.codepen.io/assets/embed/ei.js');
