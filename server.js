@@ -3,6 +3,9 @@ const request = require('request');
 const cors = require('cors');
 const mysql = require('mysql2');
 const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcrypt');
+
 
 const app = express();
 let port = 4200;
@@ -31,6 +34,239 @@ const corsOptions = {
     origin: '*',
     optionsSuccessStatus: 200,
 };
+
+
+// generate new api key
+app.post('/keys', (req, res) => {
+    if (!req.body.user){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'User is not provided.'
+        });
+    }
+    if (!req.body.wallet){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'Wallet is missing.'
+        });
+    }
+    else if (!req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'The informed wallet is invalid.'
+        });
+    }
+    else {
+        const key = uuidv4().split('-').join('');
+        const secret = uuidv4().split('-').join('');
+        const user = req.body.user.trim().slice(0,128);
+
+        const keyCryptPromise = bcrypt.hash(key, 10); 
+        const secretCryptPromise = bcrypt.hash(secret, 10);
+
+        Promise.all([keyCryptPromise, secretCryptPromise]).then(hash => {
+            const data = {
+                user: user,
+                apiKey: hash[0],
+                secret: hash[1],
+                wallet: req.body.wallet
+            };
+    
+            if (req.body.origin){
+                data.origin = req.body.origin;
+            }
+            if (req.body.note){
+                data.note = req.body.note;
+            }
+
+            mysqlConnection.execute(`INSERT INTO api_keys (${Object.keys(data).join(',')}) VALUES (${Object.keys(data).map(() => '?')})`, [
+                ...Object.values(data)
+            ]);
+    
+            res.send({
+                user: user,
+                apiKey: key,
+                secret: secret
+            });
+        })
+
+    }
+
+    // should print api key. generate one if not exists
+    // timestamp of creation
+    // total requests
+    // requests last hour
+    // bnb credit left
+
+    // generate password
+    // bcrypt.hash('pass', 10, function(err, hash) {
+    // });
+    // bcrypt.compare('pass', hash, function(err, result) {
+    // });
+});
+
+
+// edit api key information
+app.put('/keys/:key', (req, res) => {
+    const key = req.params.key;
+    const user = req.body.user;
+    const secret = req.body.secret;
+
+    if (!key.match(/^[a-f0-9]{32}$/)){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'The informed api key is invalid.'
+        });
+    }
+    else if (!user){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'User name is not provided.'
+        });
+    }
+    else if (!secret){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'The api secret was not provided.'
+        });
+    }
+    else {
+        mysqlConnection.execute(`SELECT * FROM api_keys WHERE user = ?`,[ user ], async (err, rows) => {
+            const rowsPromise = await Promise.all(rows.map(e => Promise.all([
+                bcrypt.compare(key, e.apiKey),
+                bcrypt.compare(secret, e.secret)
+            ])));
+
+            const row = rowsPromise.map((e,i) => e.filter(e => e).length == 2 ? rows[i] : false).filter(e => e);
+
+            if (row.length == 0){
+                res.status(401);
+                res.send({
+                    status: 401,
+                    error: 'Unauthorized',
+                    message: 'Could not find an api key and secret matching your user name.'
+                });
+            }
+            else {
+                const data = {};
+                const id = row[0].id;
+
+                let newKey = data.apiKey;
+
+                // fields to edit
+                if (req.body.resetKey){
+                    newKey = uuidv4().split('-').join('');
+                    data.apiKey = await bcrypt.hash(newKey, 10);
+                }
+                if (req.body.wallet && req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
+                    data.wallet = req.body.wallet;
+                }
+                if (req.body.origin){
+                    data.origin = req.body.origin;
+                }
+                if (req.body.note){
+                    data.note = req.body.note;
+                }
+
+                const fields = Object.entries(data).map(e => `${e[0]} = '${e[1]}'`).join(',');
+
+                if (fields == ''){
+                    res.send({ message: 'No information was changed.' });
+                }
+                else {
+                    const sql = `UPDATE api_keys SET ${fields} WHERE id = ${id}`;
+                    mysqlConnection.execute(sql, (error, result) => {
+                        if (error){
+                            res.status(500);
+                            res.send(error);
+                        }
+                        else{
+                            data.apiKey = newKey;
+            
+                            res.send({
+                                message: 'api key ionformation updated.',
+                                ...data
+                            });
+                        }
+                    });
+                }
+
+            }
+        });
+    }});
+
+
+// get api key info
+app.get('/keys/:key', cors(corsOptions), (req, res) => {
+    const key = req.params.key;
+    const user = req.query.user;
+
+    if (!key.match(/^[a-f0-9]{32}$/)){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'The informed api key is invalid.'
+        });
+    }
+    else if (!user){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'User name is not provided.'
+        });
+    }
+    else {
+        mysqlConnection.execute(`SELECT * FROM api_keys WHERE user = ?`,[ user ], (err, rows) => {
+            Promise.all(rows.map(e => bcrypt.compare(key, e.apiKey))).then(matches => {
+                const row = matches.map((e,i) => e ? rows[i] : false).filter(e => e);
+
+                if (row.length == 0){
+                    res.status(401);
+                    res.send({
+                        status: 401,
+                        error: 'Unauthorized',
+                        message: 'Could not find an api key matching your user name.'
+                    });
+                }
+                else {
+                    const data = {
+                        user: row[0].user,
+                        apiKey: key,
+                        creation: row[0].creation,
+                        wallet: row[0].wallet,
+                        credit: row[0].credit
+                    };
+
+                    if (row[0].origin){
+                        data.origin = row[0].origin;
+                    }
+                    if (row[0].note){
+                        data.note = row[0].note;
+                    }
+
+                    res.send(data);
+                }
+
+            });
+
+        });
+    }
+});
+
 
 app.get('/gas', cors(corsOptions), (req, res) => {
     requestOracle().then(({error, response, data}) => {

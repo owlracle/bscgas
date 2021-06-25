@@ -588,3 +588,13 @@ function setColorGradient(elem, time){
 const codepenEmbed = `<p class="codepen" data-height="265" data-theme-id="{{THEME}}" data-default-tab="js,result" data-user="pswerlang" data-slug-hash="GRWQzzR" style="height: 265px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid; margin: 1em 0; padding: 1em;" data-pen-title="BSC gas price sample code"><span>See the Pen <a href="https://codepen.io/pswerlang/pen/GRWQzzR">BSC gas price sample code</a> by Pablo (<a href="https://codepen.io/pswerlang">@pswerlang</a>) on <a href="https://codepen.io">CodePen</a>.</span></p>`;
 document.querySelector('#codepen').innerHTML = codepenEmbed.split('{{THEME}}').join(theme.get());
 import('https://cpwebassets.codepen.io/assets/embed/ei.js');
+
+
+// window.post = async function(url, args) {
+//     const response = await fetch(url, {
+//         method: args.method || 'POST',
+//         body: JSON.stringify(args),
+//         headers: { 'Content-Type': 'application/json' }
+//     });
+//     return response.json();
+// }
