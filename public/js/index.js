@@ -57,7 +57,7 @@ const chart = {
         await this.package;
 
         this.obj = LightweightCharts.createChart(document.querySelector('#chart'), {
-            width: 600,
+            width: Math.min(document.querySelector('#frame').offsetWidth - 20, 600),
             height: 300,
             crosshair: {
                 mode: LightweightCharts.CrosshairMode.Normal,
@@ -66,6 +66,10 @@ const chart = {
                 timeVisible: true,
                 secondsVisible: false,
             },
+        });
+
+        window.addEventListener('resize', () => {
+            this.obj.resize(Math.min(document.querySelector('#frame').offsetWidth - 20, 600), 300);
         });
     
         this.series = {
