@@ -11,6 +11,9 @@ const app = express();
 let port = 4200;
 let saveDB = true;
 
+const USAGE_LIMIT = 1;
+const REQUEST_COST = 5;
+
 // receive args
 process.argv.forEach((val, index, array) => {
     if ((val == '-p' || val == '--port') && array[index+1]){
@@ -268,11 +271,31 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
     const key = req.query.apikey;
     const resp = {};
     const sqlData = {};
+    const usage = { ip: 0, apiKey: 0 };
+    let credit = 0;
+
+    // check how many requests using ip
+    if (req.header('x-real-ip')){
+        const ip = req.header('x-real-ip');
+        mysqlConnection.execute(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`, (error, rows) => {
+            if (error){
+                resp.error = {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to discover your api usage.',
+                    serverMessage: error,
+                };
+            }
+            else {
+                usage.ip = rows[0].total;
+            }
+        });
+    }
 
     let keyPromise = true;
     if (key){
         keyPromise = new Promise(resolve => {
-            mysqlConnection.execute(`SELECT id, apiKey FROM api_keys WHERE peek = '${key.slice(-4)}'`, async (error, rows) => {
+            mysqlConnection.execute(`SELECT id, apiKey, credit FROM api_keys WHERE peek = '${key.slice(-4)}'`, async (error, rows) => {
                 if (error){
                     resp.error = {
                         status: 500,
@@ -280,6 +303,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
                         message: 'Error while trying to retrieve api key information from database',
                         serverMessage: error
                     };
+                    resolve(true);
                 }
                 else{
                     const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
@@ -290,71 +314,128 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
                             error: 'Unauthorized',
                             message: 'Could not find your api key.'
                         };
+                        resolve(true);
                     }
                     else{
                         sqlData.apiKey = row[0].id;
+                        credit = row[0].credit;
+
+                        // discorver usage from api key
+                        mysqlConnection.execute(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`, (error, rows) => {
+                            if (error){
+                                resp.error = {
+                                    status: 500,
+                                    error: 'Internal Server Error',
+                                    message: 'Error while trying to discover your api usage.',
+                                    serverMessage: error,
+                                };
+                            }
+                            else {
+                                usage.apiKey = rows[0].total;
+                            }
+                            resolve(true);
+                        });
+                
                     }
                 }
-                resolve(true);
             });
         })
     }
 
     await keyPromise;
 
-    const {error, response, data} = await requestOracle();
-
-    if (error){
-        res.status(500);
+    if (resp.error){
+        res.status(resp.error.status);
+        res.send(resp.error);
+    }
+    else if (usage.ip >= USAGE_LIMIT){
+        res.status(403);
         res.send({
-            status: 500,
-            error: 'Internal Server Error',
-            message: 'Error while trying to fetch information from price oracle.',
-            serverMessage: error,
+            status: 403,
+            error: 'Forbidden',
+            message: 'You have reached the ip address request limit. Try using an api key.'
+        });
+    }
+    else if (key && credit < 0){
+        res.status(403);
+        res.send({
+            status: 403,
+            error: 'Forbidden',
+            message: 'You dont have enough credits. Recharge or wait a few minutes before trying again.'
         });
     }
     else {
-        const oracleData = JSON.parse(data);
-        resp.timestamp = new Date().toISOString();
-
-        if (oracleData.standard){
-            resp.slow = oracleData.safeLow;
-            resp.standard = oracleData.standard;
-            resp.fast = oracleData.fast;
-            resp.instant = oracleData.fastest;
-            resp.block_time = oracleData.block_time;
-            resp.last_block = oracleData.blockNum;
+        
+        const {error, response, data} = await requestOracle();
+    
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to fetch information from price oracle.',
+                serverMessage: error,
+            });
         }
         else {
-            resp.error = 'Oracle is restarting';
-        }
-
-        sqlData.endpoint = 'gas';
-
-        if (req.header('x-real-ip')){
-            sqlData.ip = req.header('x-real-ip');
-        }
-        if (req.header('x-real-ip')){
-            sqlData.origin = req.header('Origin');
-        }
-
-        const fields = Object.keys(sqlData).join(',');
-        const values = Object.values(sqlData).map(e => `'${e}'`).join(',');
-
-        // save API request to DB for statistics purpose
-        mysqlConnection.execute(`INSERT INTO api_requests (${fields}) VALUES (${values})`, (error, rows) => {
-            if (error){
-                resp.error = {
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to record api request into the database.',
-                    serverMessage: error,
-                };
+            if (key && usage.apiKey >= USAGE_LIMIT){
+                // reduce credits
+                credit -= REQUEST_COST;
+                mysqlConnection.execute(`UPDATE api_keys SET credit = '${credit}' WHERE id = ${sqlData.apiKey}`, (error, rows) => {
+                    if (error){
+                        resp.error = {
+                            status: 500,
+                            error: 'Internal Server Error',
+                            message: 'Error while trying to update credits for api key usage.',
+                            serverMessage: error,
+                        };
+                    }
+                });
             }
-        });
-
-        res.send(resp);
+    
+            const oracleData = JSON.parse(data);
+            resp.timestamp = new Date().toISOString();
+    
+            if (oracleData.standard){
+                resp.slow = oracleData.safeLow;
+                resp.standard = oracleData.standard;
+                resp.fast = oracleData.fast;
+                resp.instant = oracleData.fastest;
+                resp.block_time = oracleData.block_time;
+                resp.last_block = oracleData.blockNum;
+            }
+            else {
+                resp.error = 'Oracle is restarting';
+            }
+    
+            sqlData.endpoint = 'gas';
+    
+            if (req.header('x-real-ip')){
+                sqlData.ip = req.header('x-real-ip');
+            }
+            if (req.header('x-real-ip')){
+                sqlData.origin = req.header('Origin');
+            }
+    
+            const fields = Object.keys(sqlData).join(',');
+            const values = Object.values(sqlData).map(e => `'${e}'`).join(',');
+    
+            // save API request to DB for statistics purpose
+            mysqlConnection.execute(`INSERT INTO api_requests (${fields}) VALUES (${values})`, (error, rows) => {
+                if (error){
+                    resp.error = {
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while trying to record api request into the database.',
+                        serverMessage: error,
+                    };
+                }
+            });
+    
+            res.send(resp);
+        }
     }
+    
 });
 
 
