@@ -37,15 +37,7 @@ const corsOptions = {
 
 
 // generate new api key
-app.post('/keys', (req, res) => {
-    if (!req.body.user){
-        res.status(400);
-        res.send({
-            status: 400,
-            error: 'Bad Request',
-            message: 'User is not provided.'
-        });
-    }
+app.post('/keys', async (req, res) => {
     if (!req.body.wallet){
         res.status(400);
         res.send({
@@ -65,57 +57,52 @@ app.post('/keys', (req, res) => {
     else {
         const key = uuidv4().split('-').join('');
         const secret = uuidv4().split('-').join('');
-        const user = req.body.user.trim().slice(0,128);
 
         const keyCryptPromise = bcrypt.hash(key, 10); 
         const secretCryptPromise = bcrypt.hash(secret, 10);
 
-        Promise.all([keyCryptPromise, secretCryptPromise]).then(hash => {
-            const data = {
-                user: user,
-                apiKey: hash[0],
-                secret: hash[1],
-                wallet: req.body.wallet
-            };
-    
-            if (req.body.origin){
-                data.origin = req.body.origin;
-            }
-            if (req.body.note){
-                data.note = req.body.note;
-            }
+        const hash = await Promise.all([keyCryptPromise, secretCryptPromise]);
 
-            mysqlConnection.execute(`INSERT INTO api_keys (${Object.keys(data).join(',')}) VALUES (${Object.keys(data).map(() => '?')})`, [
-                ...Object.values(data)
-            ]);
-    
-            res.send({
-                user: user,
-                apiKey: key,
-                secret: secret
-            });
-        })
+        const data = {
+            apiKey: hash[0],
+            secret: hash[1],
+            wallet: req.body.wallet,
+            peek: key.slice(-4),
+        };
 
+        if (req.body.origin){
+            data.origin = req.body.origin;
+        }
+        if (req.body.note){
+            data.note = req.body.note;
+        }
+
+        mysqlConnection.execute(`INSERT INTO api_keys (${Object.keys(data).join(',')}) VALUES (${Object.keys(data).map(() => '?')})`, [
+            ...Object.values(data)
+        ], (error, rows) => {
+            if (error){
+                res.status(500);
+                res.send({
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to insert new api key to database',
+                    serverMessage: error,
+                });
+            }
+            else {
+                res.send({
+                    apiKey: key,
+                    secret: secret
+                });
+            }
+        });
     }
-
-    // should print api key. generate one if not exists
-    // timestamp of creation
-    // total requests
-    // requests last hour
-    // bnb credit left
-
-    // generate password
-    // bcrypt.hash('pass', 10, function(err, hash) {
-    // });
-    // bcrypt.compare('pass', hash, function(err, result) {
-    // });
 });
 
 
 // edit api key information
-app.put('/keys/:key', (req, res) => {
+app.put('/keys/:key', async (req, res) => {
     const key = req.params.key;
-    const user = req.body.user;
     const secret = req.body.secret;
 
     if (!key.match(/^[a-f0-9]{32}$/)){
@@ -124,14 +111,6 @@ app.put('/keys/:key', (req, res) => {
             status: 400,
             error: 'Bad Request',
             message: 'The informed api key is invalid.'
-        });
-    }
-    else if (!user){
-        res.status(400);
-        res.send({
-            status: 400,
-            error: 'Bad Request',
-            message: 'User name is not provided.'
         });
     }
     else if (!secret){
@@ -143,75 +122,94 @@ app.put('/keys/:key', (req, res) => {
         });
     }
     else {
-        mysqlConnection.execute(`SELECT * FROM api_keys WHERE user = ?`,[ user ], async (err, rows) => {
-            const rowsPromise = await Promise.all(rows.map(e => Promise.all([
-                bcrypt.compare(key, e.apiKey),
-                bcrypt.compare(secret, e.secret)
-            ])));
-
-            const row = rowsPromise.map((e,i) => e.filter(e => e).length == 2 ? rows[i] : false).filter(e => e);
-
-            if (row.length == 0){
-                res.status(401);
+        mysqlConnection.execute(`SELECT * FROM api_keys WHERE peek = ?`,[
+            key.slice(-4),
+        ], async (error, rows) => {
+            if (error){
+                res.status(500);
                 res.send({
-                    status: 401,
-                    error: 'Unauthorized',
-                    message: 'Could not find an api key and secret matching your user name.'
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to search the database for your api key.',
+                    serverMessage: error,
                 });
             }
-            else {
-                const data = {};
-                const id = row[0].id;
+            else{
 
-                let newKey = data.apiKey;
+                const rowsPromise = rows.map(row => Promise.all([
+                    bcrypt.compare(key, row.apiKey),
+                    bcrypt.compare(secret, row.secret)
+                ]));
+                const row = (await Promise.all(rowsPromise)).map((e,i) => e[0] && e[1] ? rows[i] : false).filter(e => e);
 
-                // fields to edit
-                if (req.body.resetKey){
-                    newKey = uuidv4().split('-').join('');
-                    data.apiKey = await bcrypt.hash(newKey, 10);
-                }
-                if (req.body.wallet && req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
-                    data.wallet = req.body.wallet;
-                }
-                if (req.body.origin){
-                    data.origin = req.body.origin;
-                }
-                if (req.body.note){
-                    data.note = req.body.note;
-                }
-
-                const fields = Object.entries(data).map(e => `${e[0]} = '${e[1]}'`).join(',');
-
-                if (fields == ''){
-                    res.send({ message: 'No information was changed.' });
-                }
-                else {
-                    const sql = `UPDATE api_keys SET ${fields} WHERE id = ${id}`;
-                    mysqlConnection.execute(sql, (error, result) => {
-                        if (error){
-                            res.status(500);
-                            res.send(error);
-                        }
-                        else{
-                            data.apiKey = newKey;
-            
-                            res.send({
-                                message: 'api key ionformation updated.',
-                                ...data
-                            });
-                        }
+                if (row.length == 0){
+                    res.status(401);
+                    res.send({
+                        status: 401,
+                        error: 'Unauthorized',
+                        message: 'Could not find an api key matching the provided secret key.'
                     });
                 }
-
+                else {
+                    const data = {};
+                    const id = row[0].id;
+        
+                    let newKey = key;
+        
+                    // fields to edit
+                    if (req.body.resetKey){
+                        newKey = uuidv4().split('-').join('');
+                        data.peek = newKey.slice(-4);
+                        data.apiKey = await bcrypt.hash(newKey, 10);
+                    }
+                    if (req.body.wallet && req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
+                        data.wallet = req.body.wallet;
+                    }
+                    if (req.body.origin){
+                        data.origin = req.body.origin;
+                    }
+                    if (req.body.note){
+                        data.note = req.body.note;
+                    }
+        
+                    const fields = Object.entries(data).map(e => `${e[0]} = '${e[1]}'`).join(',');
+        
+                    if (fields == ''){
+                        res.send({ message: 'No information was changed.' });
+                    }
+                    else {
+                        mysqlConnection.execute(`UPDATE api_keys SET ${fields} WHERE id = ${id}`, (error, rows) => {
+                            if (error){
+                                res.status(500);
+                                res.send({
+                                    status: 500,
+                                    error: 'Internal Server Error',
+                                    message: 'Error while trying to update api key information.',
+                                    serverMessage: error,
+                                });
+                            }
+                            else{
+                                data.apiKey = newKey;
+                                delete data.peek;
+                
+                                res.send({
+                                    message: 'api key ionformation updated.',
+                                    ...data
+                                });
+                            }
+                        });
+                    }
+        
+                }
             }
         });
+            
     }});
 
 
 // get api key info
-app.get('/keys/:key', cors(corsOptions), (req, res) => {
+app.get('/keys/:key', cors(corsOptions), async (req, res) => {
     const key = req.params.key;
-    const user = req.query.user;
 
     if (!key.match(/^[a-f0-9]{32}$/)){
         res.status(400);
@@ -221,90 +219,144 @@ app.get('/keys/:key', cors(corsOptions), (req, res) => {
             message: 'The informed api key is invalid.'
         });
     }
-    else if (!user){
-        res.status(400);
-        res.send({
-            status: 400,
-            error: 'Bad Request',
-            message: 'User name is not provided.'
-        });
-    }
     else {
-        mysqlConnection.execute(`SELECT * FROM api_keys WHERE user = ?`,[ user ], (err, rows) => {
-            Promise.all(rows.map(e => bcrypt.compare(key, e.apiKey))).then(matches => {
-                const row = matches.map((e,i) => e ? rows[i] : false).filter(e => e);
-
+        mysqlConnection.execute(`SELECT * FROM api_keys WHERE peek = ?`,[ key.slice(-4) ], async (error, rows) => {
+            if (error){
+                res.status(500);
+                res.send({
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to search the database for your api key.',
+                    serverMessage: error,
+                });
+            }
+            else{
+                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+        
                 if (row.length == 0){
                     res.status(401);
                     res.send({
                         status: 401,
                         error: 'Unauthorized',
-                        message: 'Could not find an api key matching your user name.'
+                        message: 'Could not find your api key.'
                     });
                 }
                 else {
                     const data = {
-                        user: row[0].user,
                         apiKey: key,
                         creation: row[0].creation,
                         wallet: row[0].wallet,
                         credit: row[0].credit
                     };
-
+        
                     if (row[0].origin){
                         data.origin = row[0].origin;
                     }
                     if (row[0].note){
                         data.note = row[0].note;
                     }
-
+        
                     res.send(data);
                 }
-
-            });
-
+            }
         });
     }
 });
 
 
-app.get('/gas', cors(corsOptions), (req, res) => {
-    requestOracle().then(({error, response, data}) => {
-        if (error){
-            res.send({ error: error });
+app.get('/gas', cors(corsOptions), async (req, res) => {
+    const key = req.query.apikey;
+    const resp = {};
+    const sqlData = {};
+
+    let keyPromise = true;
+    if (key){
+        keyPromise = new Promise(resolve => {
+            mysqlConnection.execute(`SELECT id, apiKey FROM api_keys WHERE peek = '${key.slice(-4)}'`, async (error, rows) => {
+                if (error){
+                    resp.error = {
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while trying to retrieve api key information from database',
+                        serverMessage: error
+                    };
+                }
+                else{
+                    const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+
+                    if (row.length == 0){
+                        resp.error = {
+                            status: 401,
+                            error: 'Unauthorized',
+                            message: 'Could not find your api key.'
+                        };
+                    }
+                    else{
+                        sqlData.apiKey = row[0].id;
+                    }
+                }
+                resolve(true);
+            });
+        })
+    }
+
+    await keyPromise;
+
+    const {error, response, data} = await requestOracle();
+
+    if (error){
+        res.status(500);
+        res.send({
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while trying to fetch information from price oracle.',
+            serverMessage: error,
+        });
+    }
+    else {
+        const oracleData = JSON.parse(data);
+        resp.timestamp = new Date().toISOString();
+
+        if (oracleData.standard){
+            resp.slow = oracleData.safeLow;
+            resp.standard = oracleData.standard;
+            resp.fast = oracleData.fast;
+            resp.instant = oracleData.fastest;
+            resp.block_time = oracleData.block_time;
+            resp.last_block = oracleData.blockNum;
         }
         else {
-            data = JSON.parse(data);
-            const resp = {};
-            resp.timestamp = new Date().toISOString();
-
-            if (data.standard){
-                resp.slow = data.safeLow;
-                resp.standard = data.standard;
-                resp.fast = data.fast;
-                resp.instant = data.fastest;
-                resp.block_time = data.block_time;
-                resp.last_block = data.blockNum;
-            }
-            else {
-                resp.error = 'Oracle is restarting';
-            }
-
-            // save API request to DB for statistics purpose
-            try {
-                mysqlConnection.execute(`INSERT INTO api_requests (ip, origin) VALUES (?, ?)`, [
-                    `${req.header('x-real-ip') || ''}`,
-                    `${req.header('Origin') || ''}`,
-                ]);
-            }
-            catch(err) {
-                console.log(err);
-            }
-
-            res.send(resp);
+            resp.error = 'Oracle is restarting';
         }
-    });
+
+        sqlData.endpoint = 'gas';
+
+        if (req.header('x-real-ip')){
+            sqlData.ip = req.header('x-real-ip');
+        }
+        if (req.header('x-real-ip')){
+            sqlData.origin = req.header('Origin');
+        }
+
+        const fields = Object.keys(sqlData).join(',');
+        const values = Object.values(sqlData).map(e => `'${e}'`).join(',');
+
+        // save API request to DB for statistics purpose
+        mysqlConnection.execute(`INSERT INTO api_requests (${fields}) VALUES (${values})`, (error, rows) => {
+            if (error){
+                resp.error = {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to record api request into the database.',
+                    serverMessage: error,
+                };
+            }
+        });
+
+        res.send(resp);
+    }
 });
+
 
 app.get('/history', cors(corsOptions), async (req, res) => {
     const listTimeframes = {
@@ -332,11 +384,16 @@ app.get('/history', cors(corsOptions), async (req, res) => {
         candles,
         offset,
     ]);
-    mysqlConnection.execute(sql, (err, rows) => {
+    mysqlConnection.execute(sql, (error, rows) => {
         // res.send(sql);
-        if (err){
-            res.send({error: err});
-            // res.send({error: err, sql: sql});
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while retrieving price history information from database.',
+                serverMessage: error,
+            });
         }
         else {
             const fields = ['open', 'close', 'low', 'high'];
@@ -364,12 +421,13 @@ app.listen(port, () => {
 });
 
 async function requestOracle(){
-    return new Promise(resolve => {
-        request('http://127.0.0.1:8097', (error, response, data) => {
-            // sample data: {"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}
-            resolve({ error: error, response: response, data: data });
-        });
-    });
+    return new Promise(resolve => resolve({data: JSON.stringify({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408})}));
+    // return new Promise(resolve => {
+    //     request('http://127.0.0.1:8097', (error, response, data) => {
+    //         // sample data: {"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}
+    //         resolve({ error: error, response: response, data: data });
+    //     });
+    // });
 }
 
 // get prices to build database with price history
@@ -379,17 +437,16 @@ async function buildHistory(){
         const data = JSON.parse(oracle.data);
 
         if (data.standard){
-            try {
-                mysqlConnection.execute(`INSERT INTO price_history (instant, fast, standard, slow) VALUES (?, ?, ?, ?)`, [
-                    data.fastest,
-                    data.fast,
-                    data.standard,
-                    data.safeLow,
-                ]);
-            }
-            catch(err) {
-                console.log(err);
-            }
+            mysqlConnection.execute(`INSERT INTO price_history (instant, fast, standard, slow) VALUES (?, ?, ?, ?)`, [
+                data.fastest,
+                data.fast,
+                data.standard,
+                data.safeLow,
+            ], (error, rows) => {
+                if (error){
+                    console.log(error);
+                }
+            });
         }
     }
 
