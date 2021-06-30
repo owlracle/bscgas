@@ -24,8 +24,6 @@ process.argv.forEach((val, index, array) => {
     }
 });
 
-const mysqlConnection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '/mysql_config.json')));
-
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -80,25 +78,26 @@ app.post('/keys', async (req, res) => {
             data.note = req.body.note;
         }
 
-        mysqlConnection.execute(`INSERT INTO api_keys (${Object.keys(data).join(',')}) VALUES (${Object.keys(data).map(() => '?')})`, [
-            ...Object.values(data)
-        ], (error, rows) => {
-            if (error){
-                res.status(500);
-                res.send({
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to insert new api key to database',
-                    serverMessage: error,
-                });
-            }
-            else {
-                res.send({
-                    apiKey: key,
-                    secret: secret
-                });
-            }
-        });
+        const fields = Object.keys(data).join(',');
+        const values = Object.values(data).map(e => `'${e}'`).join(',');
+
+        const [rows, error] = await db.query(`INSERT INTO api_keys (${fields}) VALUES (${values})`);
+
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to insert new api key to database',
+                serverMessage: error,
+            });
+        }
+        else {
+            res.send({
+                apiKey: key,
+                secret: secret
+            });
+        }
     }
 });
 
@@ -125,87 +124,84 @@ app.put('/keys/:key', async (req, res) => {
         });
     }
     else {
-        mysqlConnection.execute(`SELECT * FROM api_keys WHERE peek = ?`,[
-            key.slice(-4),
-        ], async (error, rows) => {
-            if (error){
-                res.status(500);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to search the database for your api key.',
+                serverMessage: error,
+            });
+        }
+        else{
+            const rowsPromise = rows.map(row => Promise.all([
+                bcrypt.compare(key, row.apiKey),
+                bcrypt.compare(secret, row.secret)
+            ]));
+            const row = (await Promise.all(rowsPromise)).map((e,i) => e[0] && e[1] ? rows[i] : false).filter(e => e);
+
+            if (row.length == 0){
+                res.status(401);
                 res.send({
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to search the database for your api key.',
-                    serverMessage: error,
+                    status: 401,
+                    error: 'Unauthorized',
+                    message: 'Could not find an api key matching the provided secret key.'
                 });
             }
-            else{
-
-                const rowsPromise = rows.map(row => Promise.all([
-                    bcrypt.compare(key, row.apiKey),
-                    bcrypt.compare(secret, row.secret)
-                ]));
-                const row = (await Promise.all(rowsPromise)).map((e,i) => e[0] && e[1] ? rows[i] : false).filter(e => e);
-
-                if (row.length == 0){
-                    res.status(401);
-                    res.send({
-                        status: 401,
-                        error: 'Unauthorized',
-                        message: 'Could not find an api key matching the provided secret key.'
-                    });
+            else {
+                const data = {};
+                const id = row[0].id;
+    
+                let newKey = key;
+    
+                // fields to edit
+                if (req.body.resetKey){
+                    newKey = uuidv4().split('-').join('');
+                    data.peek = newKey.slice(-4);
+                    data.apiKey = await bcrypt.hash(newKey, 10);
+                }
+                if (req.body.wallet && req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
+                    data.wallet = req.body.wallet;
+                }
+                if (req.body.origin){
+                    data.origin = req.body.origin;
+                }
+                if (req.body.note){
+                    data.note = req.body.note;
+                }
+    
+                const fields = Object.entries(data).map(e => `${e[0]} = '${e[1]}'`).join(',');
+    
+                if (fields == ''){
+                    res.send({ message: 'No information was changed.' });
                 }
                 else {
-                    const data = {};
-                    const id = row[0].id;
-        
-                    let newKey = key;
-        
-                    // fields to edit
-                    if (req.body.resetKey){
-                        newKey = uuidv4().split('-').join('');
-                        data.peek = newKey.slice(-4);
-                        data.apiKey = await bcrypt.hash(newKey, 10);
-                    }
-                    if (req.body.wallet && req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
-                        data.wallet = req.body.wallet;
-                    }
-                    if (req.body.origin){
-                        data.origin = req.body.origin;
-                    }
-                    if (req.body.note){
-                        data.note = req.body.note;
-                    }
-        
-                    const fields = Object.entries(data).map(e => `${e[0]} = '${e[1]}'`).join(',');
-        
-                    if (fields == ''){
-                        res.send({ message: 'No information was changed.' });
-                    }
-                    else {
-                        mysqlConnection.execute(`UPDATE api_keys SET ${fields} WHERE id = ${id}`, (error, rows) => {
-                            if (error){
-                                res.status(500);
-                                res.send({
-                                    status: 500,
-                                    error: 'Internal Server Error',
-                                    message: 'Error while trying to update api key information.',
-                                    serverMessage: error,
-                                });
-                            }
-                            else{
-                                data.apiKey = newKey;
-                                delete data.peek;
-                
-                                res.send({
-                                    message: 'api key ionformation updated.',
-                                    ...data
-                                });
-                            }
+                    const [rows, error] = await db.query(`UPDATE api_keys SET ${fields} WHERE id = ${id}`);
+                    
+                    if (error){
+                        res.status(500);
+                        res.send({
+                            status: 500,
+                            error: 'Internal Server Error',
+                            message: 'Error while trying to update api key information.',
+                            serverMessage: error,
                         });
                     }
+                    else{
+                        data.apiKey = newKey;
+                        delete data.peek;
         
+                        res.send({
+                            message: 'api key ionformation updated.',
+                            ...data
+                        });
+                    }
                 }
+    
             }
-        });
+        }
     }
 });
 
@@ -223,47 +219,47 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
         });
     }
     else {
-        mysqlConnection.execute(`SELECT * FROM api_keys WHERE peek = ?`,[ key.slice(-4) ], async (error, rows) => {
-            if (error){
-                res.status(500);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to search the database for your api key.',
+                serverMessage: error,
+            });
+        }
+        else{
+            const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+    
+            if (row.length == 0){
+                res.status(401);
                 res.send({
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to search the database for your api key.',
-                    serverMessage: error,
+                    status: 401,
+                    error: 'Unauthorized',
+                    message: 'Could not find your api key.'
                 });
             }
-            else{
-                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
-        
-                if (row.length == 0){
-                    res.status(401);
+            else {
+                const id = row[0].id;
+
+                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE timestamp > now(3) - INTERVAL 1 HOUR AND apiKey = '${id}' ORDER BY timestamp DESC`);
+
+                if (error){
+                    res.status(500);
                     res.send({
-                        status: 401,
-                        error: 'Unauthorized',
-                        message: 'Could not find your api key.'
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while trying to fetch your logs.',
+                        serverMessage: error,
                     });
                 }
                 else {
-                    const id = row[0].id;
-
-                    mysqlConnection.execute(`SELECT ip, origin, timestamp FROM api_requests WHERE timestamp > now(3) - INTERVAL 1 HOUR AND apiKey = '${id}' ORDER BY timestamp DESC`, async (error, rows) => {
-                        if (error){
-                            res.status(500);
-                            res.send({
-                                status: 500,
-                                error: 'Internal Server Error',
-                                message: 'Error while trying to fetch your logs.',
-                                serverMessage: error,
-                            });
-                        }
-                        else {
-                            res.send(rows);
-                        }
-                    });
+                    res.send(rows);
                 }
             }
-        });
+        }
     }
 
 });
@@ -282,79 +278,80 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
         });
     }
     else {
-        mysqlConnection.execute(`SELECT * FROM api_keys WHERE peek = ?`,[ key.slice(-4) ], async (error, rows) => {
-            if (error){
-                res.status(500);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`,);
+
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to search the database for your api key.',
+                serverMessage: error,
+            });
+        }
+        else {
+            const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+    
+            if (row.length == 0){
+                res.status(401);
                 res.send({
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to search the database for your api key.',
-                    serverMessage: error,
+                    status: 401,
+                    error: 'Unauthorized',
+                    message: 'Could not find your api key.'
                 });
             }
-            else{
-                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
-        
-                if (row.length == 0){
-                    res.status(401);
+            else {
+                const id = row[0].id;
+    
+                const data = {
+                    apiKey: key,
+                    creation: row[0].creation,
+                    wallet: row[0].wallet,
+                    credit: row[0].credit
+                };
+    
+                if (row[0].origin){
+                    data.origin = row[0].origin;
+                }
+                if (row[0].note){
+                    data.note = row[0].note;
+                }
+    
+                const hourApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id} AND timestamp >= now() - INTERVAL 1 HOUR`;
+                const totalApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id}`;
+                let hourIp = 'SELECT 0';
+                let totalIp = 'SELECT 0';
+    
+                if (req.header('x-real-ip')){
+                    const ip = req.header('x-real-ip');
+                    hourIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip} AND timestamp >= now() - INTERVAL 1 HOUR`;
+                    totalIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip}`;
+                }
+    
+    
+                const [rows, error] = await db.query(`SELECT (${hourApi}) AS hourapi, (${hourIp}) AS hourip, (${totalApi}) AS totalapi, (${totalIp}) AS totalip`);
+
+                if (error){
+                    res.status(500);
                     res.send({
-                        status: 401,
-                        error: 'Unauthorized',
-                        message: 'Could not find your api key.'
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while trying to search the database for your api key.',
+                        serverMessage: error,
                     });
                 }
                 else {
-                    const id = row[0].id;
-
-                    const data = {
-                        apiKey: key,
-                        creation: row[0].creation,
-                        wallet: row[0].wallet,
-                        credit: row[0].credit
+                    data.usage = {
+                        apiKeyHour: rows[0].hourapi,
+                        ipHour: rows[0].hourip,
+                        apiKeyTotal: rows[0].totalapi,
+                        ipTotal: rows[0].totalip,
                     };
         
-                    if (row[0].origin){
-                        data.origin = row[0].origin;
-                    }
-                    if (row[0].note){
-                        data.note = row[0].note;
-                    }
-
-                    const hourApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id} AND timestamp >= now() - INTERVAL 1 HOUR`;
-                    const totalApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id}`;
-                    let hourIp = 'SELECT 0';
-                    let totalIp = 'SELECT 0';
-
-                    if (req.header('x-real-ip')){
-                        const ip = req.header('x-real-ip');
-                        hourIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip} AND timestamp >= now() - INTERVAL 1 HOUR`;
-                        totalIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip}`;
-                    }
-
-                    mysqlConnection.execute(`SELECT (${hourApi}) AS hourapi, (${hourIp}) AS hourip, (${totalApi}) AS totalapi, (${totalIp}) AS totalip`, async (error, rows) => {
-                        if (error){
-                            res.status(500);
-                            res.send({
-                                status: 500,
-                                error: 'Internal Server Error',
-                                message: 'Error while trying to search the database for your api key.',
-                                serverMessage: error,
-                            });
-                        }
-                        else {
-                            data.usage = {
-                                apiKeyHour: rows[0].hourapi,
-                                ipHour: rows[0].hourip,
-                                apiKeyTotal: rows[0].totalapi,
-                                ipTotal: rows[0].totalip,
-                            };
-
-                            res.send(data);
-                        }
-                    })
+                    res.send(data);
                 }
             }
-        });
+        }
     }
 });
 
@@ -369,68 +366,68 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
     // check how many requests using ip
     if (req.header('x-real-ip')){
         const ip = req.header('x-real-ip');
-        mysqlConnection.execute(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`, (error, rows) => {
-            if (error){
-                resp.error = {
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to discover your api usage.',
-                    serverMessage: error,
-                };
-            }
-            else {
-                usage.ip = rows[0].total;
-            }
-        });
+        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`);
+
+        if (error){
+            resp.error = {
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to discover your api usage.',
+                serverMessage: error,
+            };
+        }
+        else {
+            usage.ip = rows[0].total;
+        }
     }
 
     let keyPromise = true;
     if (key){
-        keyPromise = new Promise(resolve => {
-            mysqlConnection.execute(`SELECT id, apiKey, credit FROM api_keys WHERE peek = '${key.slice(-4)}'`, async (error, rows) => {
-                if (error){
+        keyPromise = new Promise(async resolve => {
+            const [rows, error] = await db.query(`SELECT id, apiKey, credit FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+
+            if (error){
+                resp.error = {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to retrieve api key information from database',
+                    serverMessage: error
+                };
+                resolve(true);
+            }
+            else{
+                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+
+                if (row.length == 0){
                     resp.error = {
-                        status: 500,
-                        error: 'Internal Server Error',
-                        message: 'Error while trying to retrieve api key information from database',
-                        serverMessage: error
+                        status: 401,
+                        error: 'Unauthorized',
+                        message: 'Could not find your api key.'
                     };
                     resolve(true);
                 }
                 else{
-                    const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+                    sqlData.apiKey = row[0].id;
+                    credit = row[0].credit;
 
-                    if (row.length == 0){
+                    // discorver usage from api key
+                    const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`);
+
+                    if (error){
                         resp.error = {
-                            status: 401,
-                            error: 'Unauthorized',
-                            message: 'Could not find your api key.'
+                            status: 500,
+                            error: 'Internal Server Error',
+                            message: 'Error while trying to discover your api usage.',
+                            serverMessage: error,
                         };
-                        resolve(true);
                     }
-                    else{
-                        sqlData.apiKey = row[0].id;
-                        credit = row[0].credit;
-
-                        // discorver usage from api key
-                        mysqlConnection.execute(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`, (error, rows) => {
-                            if (error){
-                                resp.error = {
-                                    status: 500,
-                                    error: 'Internal Server Error',
-                                    message: 'Error while trying to discover your api usage.',
-                                    serverMessage: error,
-                                };
-                            }
-                            else {
-                                usage.apiKey = rows[0].total;
-                            }
-                            resolve(true);
-                        });
-                
+                    else {
+                        usage.apiKey = rows[0].total;
                     }
+                    resolve(true);
+            
                 }
-            });
+            }
         })
     }
 
@@ -473,16 +470,16 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             if (key && usage.apiKey >= USAGE_LIMIT){
                 // reduce credits
                 credit -= REQUEST_COST;
-                mysqlConnection.execute(`UPDATE api_keys SET credit = '${credit}' WHERE id = ${sqlData.apiKey}`, (error, rows) => {
-                    if (error){
-                        resp.error = {
-                            status: 500,
-                            error: 'Internal Server Error',
-                            message: 'Error while trying to update credits for api key usage.',
-                            serverMessage: error,
-                        };
-                    }
-                });
+                const [rows, error] = await db.query(`UPDATE api_keys SET credit = '${credit}' WHERE id = ${sqlData.apiKey}`);
+
+                if (error){
+                    resp.error = {
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while trying to update credits for api key usage.',
+                        serverMessage: error,
+                    };
+                }
             }
     
             const oracleData = JSON.parse(data);
@@ -513,16 +510,16 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             const values = Object.values(sqlData).map(e => `'${e}'`).join(',');
     
             // save API request to DB for statistics purpose
-            mysqlConnection.execute(`INSERT INTO api_requests (${fields}) VALUES (${values})`, (error, rows) => {
-                if (error){
-                    resp.error = {
-                        status: 500,
-                        error: 'Internal Server Error',
-                        message: 'Error while trying to record api request into the database.',
-                        serverMessage: error,
-                    };
-                }
-            });
+            const [rows, error] = await db.query(`INSERT INTO api_requests (${fields}) VALUES (${values})`);
+
+            if (error){
+                resp.error = {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to record api request into the database.',
+                    serverMessage: error,
+                };
+            }
     
             res.send(resp);
         }
@@ -550,41 +547,33 @@ app.get('/history', cors(corsOptions), async (req, res) => {
 
     const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
     
-    const sql = mysqlConnection.format(`SELECT p.timestamp, ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(p.timestamp) BETWEEN ? AND ? GROUP BY UNIX_TIMESTAMP(p.timestamp) DIV ? ORDER BY p.timestamp DESC LIMIT ? OFFSET ?`, [
-        req.query.from || 0,
-        req.query.to || new Date().getTime() / 1000,
-        timeframe * 60,
-        candles,
-        offset,
-    ]);
-    mysqlConnection.execute(sql, (error, rows) => {
-        // res.send(sql);
-        if (error){
-            res.status(500);
-            res.send({
-                status: 500,
-                error: 'Internal Server Error',
-                message: 'Error while retrieving price history information from database.',
-                serverMessage: error,
-            });
-        }
-        else {
-            const fields = ['open', 'close', 'low', 'high'];
+    const [rows, error] = await db.query(`SELECT p.timestamp, ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(p.timestamp) BETWEEN '${req.query.from || 0}' AND '${req.query.to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(p.timestamp) DIV ${timeframe * 60} ORDER BY p.timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
 
-            rows = rows.map(row => {
-                const tempRow = Object.fromEntries(speeds.map(speed => 
-                    [speed, Object.fromEntries(fields.map(field => 
-                        [field, row[`${speed}.${field}`]]
-                    ))]
-                ));
-                tempRow.timestamp = row.timestamp;
-                tempRow.samples = row.samples;
-                return tempRow;
-            });
+    if (error){
+        res.status(500);
+        res.send({
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while retrieving price history information from database.',
+            serverMessage: error,
+        });
+    }
+    else {
+        const fields = ['open', 'close', 'low', 'high'];
 
-            res.send(rows);
-        }
-    });
+        rows = rows.map(row => {
+            const tempRow = Object.fromEntries(speeds.map(speed => 
+                [speed, Object.fromEntries(fields.map(field => 
+                    [field, row[`${speed}.${field}`]]
+                ))]
+            ));
+            tempRow.timestamp = row.timestamp;
+            tempRow.samples = row.samples;
+            return tempRow;
+        });
+
+        res.send(rows);
+    }
 });
 
 app.use(express.static(__dirname + '/public/'));
@@ -610,16 +599,11 @@ async function buildHistory(){
         const data = JSON.parse(oracle.data);
 
         if (data.standard){
-            mysqlConnection.execute(`INSERT INTO price_history (instant, fast, standard, slow) VALUES (?, ?, ?, ?)`, [
-                data.fastest,
-                data.fast,
-                data.standard,
-                data.safeLow,
-            ], (error, rows) => {
-                if (error){
-                    console.log(error);
-                }
-            });
+            const [rows, error] = await db.query(`INSERT INTO price_history (instant, fast, standard, slow) VALUES ('${data.fastest}', '${data.fast}', '${data.standard}', '${data.safeLow}')`);
+
+            if (error){
+                console.log(error);
+            }
         }
     }
 
@@ -629,3 +613,18 @@ async function buildHistory(){
 if (saveDB){
     buildHistory();
 }
+
+const db = {
+    query: async function(sql) {
+        return new Promise(resolve => this.connection.execute(sql, (error, rows) => resolve([rows, error])));
+    },
+
+    // insert: async function(sql, fields, values){
+    //     fields = fields.join(',');
+    //     values = values.map(e => `'${e}'`).join(',');
+    //     sql = sql.split('?');
+
+    //     return this.query()
+    // }
+};
+db.connection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '/mysql_config.json')));
