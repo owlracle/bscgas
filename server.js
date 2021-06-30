@@ -78,10 +78,7 @@ app.post('/keys', async (req, res) => {
             data.note = req.body.note;
         }
 
-        const fields = Object.keys(data).join(',');
-        const values = Object.values(data).map(e => `'${e}'`).join(',');
-
-        const [rows, error] = await db.query(`INSERT INTO api_keys (${fields}) VALUES (${values})`);
+        const [rows, error] = await db.insert('api_keys', data);
 
         if (error){
             res.status(500);
@@ -178,7 +175,7 @@ app.put('/keys/:key', async (req, res) => {
                     res.send({ message: 'No information was changed.' });
                 }
                 else {
-                    const [rows, error] = await db.query(`UPDATE api_keys SET ${fields} WHERE id = ${id}`);
+                    const [rows, error] = await db.update('api_keys', fields, `id = ${id}`);
                     
                     if (error){
                         res.status(500);
@@ -470,7 +467,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             if (key && usage.apiKey >= USAGE_LIMIT){
                 // reduce credits
                 credit -= REQUEST_COST;
-                const [rows, error] = await db.query(`UPDATE api_keys SET credit = '${credit}' WHERE id = ${sqlData.apiKey}`);
+                const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ${sqlData.apiKey}`);
 
                 if (error){
                     resp.error = {
@@ -506,11 +503,8 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
                 sqlData.origin = req.header('Origin');
             }
     
-            const fields = Object.keys(sqlData).join(',');
-            const values = Object.values(sqlData).map(e => `'${e}'`).join(',');
-    
             // save API request to DB for statistics purpose
-            const [rows, error] = await db.query(`INSERT INTO api_requests (${fields}) VALUES (${values})`);
+            const [rows, error] = await db.insert('api_requests', sqlData);
 
             if (error){
                 resp.error = {
@@ -614,17 +608,50 @@ if (saveDB){
     buildHistory();
 }
 
+// app.get('/test', cors(corsOptions), async (req, res) => {
+//     res.send({sql: await db.update('test', {
+//         c: 1,
+//         d: 2,
+//     }, `shit = 'fan'`)});
+// });
+
+
 const db = {
     query: async function(sql) {
         return new Promise(resolve => this.connection.execute(sql, (error, rows) => resolve([rows, error])));
     },
 
-    // insert: async function(sql, fields, values){
-    //     fields = fields.join(',');
-    //     values = values.map(e => `'${e}'`).join(',');
-    //     sql = sql.split('?');
+    // {field_1: 0, field_2: 'a'}
+    // or
+    // {field_1: [0,1,2], field_2: ['a', 'b', 'c']}
+    insert: async function(table, obj){
+        const fields = Object.keys(obj).join(',');
+        const values = Object.values(obj).map(e => Array.isArray(e) ? e : [e]);
 
-    //     return this.query()
-    // }
+        let valuesRow = [];
+        for (let f in values){
+            for (let e in values[f]){
+                if (valuesRow.length == e){
+                    valuesRow.push([]);
+                }
+                if (valuesRow[e].length == f){
+                    valuesRow[e].push([]);
+                }
+                valuesRow[e][f] = values[f][e];
+            }
+        }
+        valuesRow = valuesRow.map(r => `(${ r.map(e => `'${e}'`).join(',') })`).join(',');
+        const sql = `INSERT INTO ${table} (${fields}) VALUES ${valuesRow}`;
+
+        return this.query(sql);
+    },
+
+    // obj: {field_1: 0, field_2: 'a'}
+    // filter: sql text after WHERE
+    update: async function(table, obj, filter){
+        const changesSql = Object.entries(obj).map(e => `${e[0]} = '${e[1]}'`).join(',');
+        const sql = `UPDATE ${table} SET ${changesSql} WHERE ${filter}`;
+        return this.query(sql);
+    },
 };
 db.connection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '/mysql_config.json')));
