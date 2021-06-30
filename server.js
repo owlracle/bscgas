@@ -206,8 +206,67 @@ app.put('/keys/:key', async (req, res) => {
                 }
             }
         });
-            
-    }});
+    }
+});
+
+
+// get api usage logs
+app.get('/logs/:key', cors(corsOptions), async (req, res) => {
+    const key = req.params.key;
+
+    if (!key.match(/^[a-f0-9]{32}$/)){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'The informed api key is invalid.'
+        });
+    }
+    else {
+        mysqlConnection.execute(`SELECT * FROM api_keys WHERE peek = ?`,[ key.slice(-4) ], async (error, rows) => {
+            if (error){
+                res.status(500);
+                res.send({
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to search the database for your api key.',
+                    serverMessage: error,
+                });
+            }
+            else{
+                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+        
+                if (row.length == 0){
+                    res.status(401);
+                    res.send({
+                        status: 401,
+                        error: 'Unauthorized',
+                        message: 'Could not find your api key.'
+                    });
+                }
+                else {
+                    const id = row[0].id;
+
+                    mysqlConnection.execute(`SELECT ip, origin, timestamp FROM api_requests WHERE timestamp > now(3) - INTERVAL 1 HOUR AND apiKey = '${id}' ORDER BY timestamp DESC`, async (error, rows) => {
+                        if (error){
+                            res.status(500);
+                            res.send({
+                                status: 500,
+                                error: 'Internal Server Error',
+                                message: 'Error while trying to fetch your logs.',
+                                serverMessage: error,
+                            });
+                        }
+                        else {
+                            res.send(rows);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+});
 
 
 // get api key info
@@ -245,6 +304,8 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
                     });
                 }
                 else {
+                    const id = row[0].id;
+
                     const data = {
                         apiKey: key,
                         creation: row[0].creation,
@@ -258,8 +319,39 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
                     if (row[0].note){
                         data.note = row[0].note;
                     }
-        
-                    res.send(data);
+
+                    const hourApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id} AND timestamp >= now() - INTERVAL 1 HOUR`;
+                    const totalApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id}`;
+                    let hourIp = 'SELECT 0';
+                    let totalIp = 'SELECT 0';
+
+                    if (req.header('x-real-ip')){
+                        const ip = req.header('x-real-ip');
+                        hourIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip} AND timestamp >= now() - INTERVAL 1 HOUR`;
+                        totalIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip}`;
+                    }
+
+                    mysqlConnection.execute(`SELECT (${hourApi}) AS hourapi, (${hourIp}) AS hourip, (${totalApi}) AS totalapi, (${totalIp}) AS totalip`, async (error, rows) => {
+                        if (error){
+                            res.status(500);
+                            res.send({
+                                status: 500,
+                                error: 'Internal Server Error',
+                                message: 'Error while trying to search the database for your api key.',
+                                serverMessage: error,
+                            });
+                        }
+                        else {
+                            data.usage = {
+                                apiKeyHour: rows[0].hourapi,
+                                ipHour: rows[0].hourip,
+                                apiKeyTotal: rows[0].totalapi,
+                                ipTotal: rows[0].totalip,
+                            };
+
+                            res.send(data);
+                        }
+                    })
                 }
             }
         });
