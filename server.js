@@ -6,6 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
 
+const configFile = JSON.parse(fs.readFileSync(__dirname  + '/config.json'));
 
 const app = express();
 let port = 4200;
@@ -49,6 +50,7 @@ app.post('/keys', async (req, res) => {
     const hash = await Promise.all([keyCryptPromise, secretCryptPromise]);
     
     try {
+        // create new wallet for deposits
         const wallet = await (await fetch('https://api.blockcypher.com/v1/eth/main/addrs', { method: 'POST' })).json();
         
         const data = {
@@ -65,7 +67,10 @@ app.post('/keys', async (req, res) => {
         if (req.body.note){
             data.note = req.body.note;
         }
-    
+
+        // get block height now so I know where to start looking for transactions
+        data.blockChecked = await bscscan.getBlockHeight();
+
         const [rows, error] = await db.insert('api_keys', data);
     
         if (error){
@@ -611,11 +616,56 @@ if (saveDB){
     buildHistory();
 }
 
-// app.get('/test', cors(corsOptions), async (req, res) => {
-//     let wallet = new Promise(resolve => request('https://api.blockcypher.com/v1/eth/main/addrs', (error, response, data) => resolve({error: error, response: response, data: data})));
+app.get('/tx/:key', cors(corsOptions), async (req, res) => {
+    const key = req.params.key;
 
-//     res.send(await wallet);
-// });
+    if (!key.match(/^[a-f0-9]{32}$/)){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'The informed api key is invalid.'
+        });
+    }
+    else {
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`,);
+
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to search the database for your api key.',
+                serverMessage: error,
+            });
+        }
+        else {
+            const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+    
+            if (row.length == 0){
+                res.status(401);
+                res.send({
+                    status: 401,
+                    error: 'Unauthorized',
+                    message: 'Could not find your api key.'
+                });
+            }
+            else {
+                const wallet = row[0].wallet;
+                const block = row[0].blockChecked - 10;
+
+                const txs = await bscscan.getTx(wallet, block);
+                // from this point we need to get the txs and update credits
+
+                const blockNow = await bscscan.getBlockHeight();
+
+                db.update('api_keys', { blockChecked: blockNow }, `id = ${row[0].id}`);
+
+                res.send(txs);
+            }
+        }
+    }
+});
 
 
 const db = {
@@ -656,7 +706,7 @@ const db = {
         return this.query(sql);
     },
 };
-db.connection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '/mysql_config.json')));
+db.connection = mysql.createConnection(configFile.mysql);
 
 // https://api.bscscan.com/api?module=account&action=txlist&address=0xBB512Ff07Dcb062Aeb31ade8dECbeD3C4A89ceF1&startblock=8500000&endblock=8960295&sort=asc&apikey=7GM7EHRDJQUIC8MDAKU9MP9R678F21C2N3
 // result[i]
@@ -665,3 +715,17 @@ db.connection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '
 // to: confirmar que é esta carteira a receptora
 // value: valor recebido 33122453711370938 == 0.03312245371137 BNB
 // isError == 0 deu certo
+
+const bscscan = {
+    apiKey: configFile.bscscan,
+
+    getBlockHeight: async function() {
+        const timeNow = (new Date().getTime() / 1000).toFixed(0);
+        let block = await (await fetch(`https://api.bscscan.com/api?module=block&action=getblocknobytime&timestamp=${timeNow}&closest=before&apikey=${this.apiKey}`)).json();
+        return parseInt(block.result);
+    },
+
+    getTx: async function(wallet, from){
+        return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&apikey=${this.apiKey}`)).json();
+    }
+};

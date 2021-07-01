@@ -1,0 +1,9 @@
+{
+    "bscscan": "API_KEY",
+    "mysql": {
+        "user": "USER",
+        "host": "HOST",
+        "database": "DATABASE",
+        "password": "PASSWORD"
+    }    
+}
