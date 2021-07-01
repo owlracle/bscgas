@@ -1,5 +1,5 @@
 const express = require('express');
-const request = require('request');
+const fetch = require('node-fetch');
 const cors = require('cors');
 const mysql = require('mysql2');
 const fs = require('fs');
@@ -11,7 +11,7 @@ const app = express();
 let port = 4200;
 let saveDB = true;
 
-const USAGE_LIMIT = 1;
+const USAGE_LIMIT = 100;
 const REQUEST_COST = 5;
 
 // receive args
@@ -39,47 +39,35 @@ const corsOptions = {
 
 // generate new api key
 app.post('/keys', async (req, res) => {
-    if (!req.body.wallet){
-        res.status(400);
-        res.send({
-            status: 400,
-            error: 'Bad Request',
-            message: 'Wallet is missing.'
-        });
-    }
-    else if (!req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
-        res.status(400);
-        res.send({
-            status: 400,
-            error: 'Bad Request',
-            message: 'The informed wallet is invalid.'
-        });
-    }
-    else {
-        const key = uuidv4().split('-').join('');
-        const secret = uuidv4().split('-').join('');
+    const key = uuidv4().split('-').join('');
+    const secret = uuidv4().split('-').join('');
 
-        const keyCryptPromise = bcrypt.hash(key, 10); 
-        const secretCryptPromise = bcrypt.hash(secret, 10);
+    const keyCryptPromise = bcrypt.hash(key, 10); 
+    const secretCryptPromise = bcrypt.hash(secret, 10);
 
-        const hash = await Promise.all([keyCryptPromise, secretCryptPromise]);
-
+    
+    const hash = await Promise.all([keyCryptPromise, secretCryptPromise]);
+    
+    try {
+        const wallet = await (await fetch('https://api.blockcypher.com/v1/eth/main/addrs', { method: 'POST' })).json();
+        
         const data = {
             apiKey: hash[0],
             secret: hash[1],
-            wallet: req.body.wallet,
+            wallet: `0x${wallet.address}`,
+            private: wallet.private,
             peek: key.slice(-4),
         };
-
+    
         if (req.body.origin){
             data.origin = req.body.origin;
         }
         if (req.body.note){
             data.note = req.body.note;
         }
-
+    
         const [rows, error] = await db.insert('api_keys', data);
-
+    
         if (error){
             res.status(500);
             res.send({
@@ -92,9 +80,19 @@ app.post('/keys', async (req, res) => {
         else {
             res.send({
                 apiKey: key,
-                secret: secret
+                secret: secret,
+                wallet: data.wallet,
             });
         }
+    }
+    catch (error) {
+        res.status(500);
+        res.send({
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error creating new wallet. Try again in a few minutes.',
+            serverMessage: error,
+        });
     }
 });
 
@@ -159,9 +157,6 @@ app.put('/keys/:key', async (req, res) => {
                     data.peek = newKey.slice(-4);
                     data.apiKey = await bcrypt.hash(newKey, 10);
                 }
-                if (req.body.wallet && req.body.wallet.match(/^0x[a-fA-F0-9]{40}$/)){
-                    data.wallet = req.body.wallet;
-                }
                 if (req.body.origin){
                     data.origin = req.body.origin;
                 }
@@ -169,13 +164,11 @@ app.put('/keys/:key', async (req, res) => {
                     data.note = req.body.note;
                 }
     
-                const fields = Object.entries(data).map(e => `${e[0]} = '${e[1]}'`).join(',');
-    
-                if (fields == ''){
+                if (Object.keys(data).length == 0){
                     res.send({ message: 'No information was changed.' });
                 }
                 else {
-                    const [rows, error] = await db.update('api_keys', fields, `id = ${id}`);
+                    const [rows, error] = await db.update('api_keys', data, `id = ${id}`);
                     
                     if (error){
                         res.status(500);
@@ -206,6 +199,7 @@ app.put('/keys/:key', async (req, res) => {
 // get api usage logs
 app.get('/logs/:key', cors(corsOptions), async (req, res) => {
     const key = req.params.key;
+    const timeframe = req.query.timeframe || 60;
 
     if (!key.match(/^[a-f0-9]{32}$/)){
         res.status(400);
@@ -241,7 +235,7 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
             else {
                 const id = row[0].id;
 
-                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE timestamp > now(3) - INTERVAL 1 HOUR AND apiKey = '${id}' ORDER BY timestamp DESC`);
+                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE timestamp > now(3) - INTERVAL ${timeframe} MINUTE AND apiKey = '${id}' ORDER BY timestamp DESC`);
 
                 if (error){
                     res.status(500);
@@ -434,6 +428,14 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
         res.status(resp.error.status);
         res.send(resp.error);
     }
+    else if (!usage.ip && !key){
+        res.status(403);
+        res.send({
+            status: 403,
+            error: 'Forbidden',
+            message: 'You must get behind a public ip address or use an api key.'
+        });
+    }
     else if (usage.ip >= USAGE_LIMIT){
         res.status(403);
         res.send({
@@ -452,18 +454,9 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
     }
     else {
         
-        const {error, response, data} = await requestOracle();
-    
-        if (error){
-            res.status(500);
-            res.send({
-                status: 500,
-                error: 'Internal Server Error',
-                message: 'Error while trying to fetch information from price oracle.',
-                serverMessage: error,
-            });
-        }
-        else {
+        try {
+            const data = await requestOracle();
+
             if (key && usage.apiKey >= USAGE_LIMIT){
                 // reduce credits
                 credit -= REQUEST_COST;
@@ -479,16 +472,15 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
                 }
             }
     
-            const oracleData = JSON.parse(data);
             resp.timestamp = new Date().toISOString();
     
-            if (oracleData.standard){
-                resp.slow = oracleData.safeLow;
-                resp.standard = oracleData.standard;
-                resp.fast = oracleData.fast;
-                resp.instant = oracleData.fastest;
-                resp.block_time = oracleData.block_time;
-                resp.last_block = oracleData.blockNum;
+            if (data.standard){
+                resp.slow = data.safeLow;
+                resp.standard = data.standard;
+                resp.fast = data.fast;
+                resp.instant = data.fastest;
+                resp.block_time = data.block_time;
+                resp.last_block = data.blockNum;
             }
             else {
                 resp.error = 'Oracle is restarting';
@@ -516,6 +508,15 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             }
     
             res.send(resp);
+        }
+        catch (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to fetch information from price oracle.',
+                serverMessage: error,
+            });
         }
     }
     
@@ -555,7 +556,7 @@ app.get('/history', cors(corsOptions), async (req, res) => {
     else {
         const fields = ['open', 'close', 'low', 'high'];
 
-        rows = rows.map(row => {
+        res.send(rows.map(row => {
             const tempRow = Object.fromEntries(speeds.map(speed => 
                 [speed, Object.fromEntries(fields.map(field => 
                     [field, row[`${speed}.${field}`]]
@@ -564,9 +565,7 @@ app.get('/history', cors(corsOptions), async (req, res) => {
             tempRow.timestamp = row.timestamp;
             tempRow.samples = row.samples;
             return tempRow;
-        });
-
-        res.send(rows);
+        }));
     }
 });
 
@@ -577,31 +576,35 @@ app.listen(port, () => {
 });
 
 async function requestOracle(){
-    return new Promise(resolve => resolve({data: JSON.stringify({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408})}));
-    // return new Promise(resolve => {
-    //     request('http://127.0.0.1:8097', (error, response, data) => {
-    //         // sample data: {"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}
-    //         resolve({ error: error, response: response, data: data });
-    //     });
-    // });
+    // return new Promise(resolve => resolve({data: JSON.stringify({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408})}));
+    return (await fetch('http://127.0.0.1:8097')).json();
+    // sample data: {"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}
 }
 
 // get prices to build database with price history
 async function buildHistory(){
-    const oracle = await requestOracle();
-    if (oracle.data){
-        const data = JSON.parse(oracle.data);
+    try{
+        const data = await requestOracle();
 
         if (data.standard){
-            const [rows, error] = await db.query(`INSERT INTO price_history (instant, fast, standard, slow) VALUES ('${data.fastest}', '${data.fast}', '${data.standard}', '${data.safeLow}')`);
-
+            const [rows, error] = await db.insert(`price_history`, {
+                instant: data.fastest,
+                fast: data.fast,
+                standard: data.standard,
+                slow: data.safeLow,
+            });
+            
             if (error){
                 console.log(error);
             }
         }
     }
-
-    setTimeout(() => buildHistory(), 1000 * 60); // 1 minute
+    catch (error) {
+        console.log(error);
+    }
+    finally {
+        setTimeout(() => buildHistory(), 1000 * 60); // 1 minute
+    }
 }
 
 if (saveDB){
@@ -609,10 +612,9 @@ if (saveDB){
 }
 
 // app.get('/test', cors(corsOptions), async (req, res) => {
-//     res.send({sql: await db.update('test', {
-//         c: 1,
-//         d: 2,
-//     }, `shit = 'fan'`)});
+//     let wallet = new Promise(resolve => request('https://api.blockcypher.com/v1/eth/main/addrs', (error, response, data) => resolve({error: error, response: response, data: data})));
+
+//     res.send(await wallet);
 // });
 
 
@@ -655,3 +657,11 @@ const db = {
     },
 };
 db.connection = mysql.createConnection(JSON.parse(fs.readFileSync(__dirname  + '/mysql_config.json')));
+
+// https://api.bscscan.com/api?module=account&action=txlist&address=0xBB512Ff07Dcb062Aeb31ade8dECbeD3C4A89ceF1&startblock=8500000&endblock=8960295&sort=asc&apikey=7GM7EHRDJQUIC8MDAKU9MP9R678F21C2N3
+// result[i]
+// blockNumber: onde começar a ler na proxima vez
+// from: de onde veio
+// to: confirmar que é esta carteira a receptora
+// value: valor recebido 33122453711370938 == 0.03312245371137 BNB
+// isError == 0 deu certo
