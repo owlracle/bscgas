@@ -497,7 +497,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             if (req.header('x-real-ip')){
                 sqlData.ip = req.header('x-real-ip');
             }
-            if (req.header('x-real-ip')){
+            if (req.header('Origin')){
                 sqlData.origin = req.header('Origin');
             }
     
@@ -787,7 +787,7 @@ const db = {
                 }
 
                 let value = `'${values[f][e]}'`;
-                if (Object.keys(format).includes(fields[f])){
+                if (format && Object.keys(format).includes(fields[f])){
                     const formatString = format[fields[f]].split('{{}}');
                     value = [ formatString[0], values[f][e], formatString[1] ].join('');
                 }
