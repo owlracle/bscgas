@@ -49,10 +49,9 @@
         <h2>Binance Smart Chain</h2>
         <h1><img src="img/logo.png" alt="Bscgas logo"> Gas Price Forecast <span id="time-sign"></span></h1>
 
-        <p>This tool attemps to predict the gas price to be paid on Binance Smart Chain by averaging recent past transactions.
-            Take into consideration that numbers shown here are just estimations.</p>
+        <p>This tool attempts to predict the gas price to be paid on Binance Smart Chain by averaging recent past transactions. Take into consideration that the numbers shown here are just estimations.</p>
 
-        <p>Right now, submitting transactions on BSC network should cost:</p>
+        <p>Right now, submitting transactions on the BSC network should cost:</p>
 
         <div id="gas-container">
             <div class="gas">
@@ -78,7 +77,7 @@
             <div id="countdown"><div id="filled"></div></div>
         </div>
 
-        <p class="quote">Most of the time prices are <b>5 GWei</b> for all speeds. If you came from Ethereum network, you may find this a little odd. But rest assured, it is just the way BSC works. Our oracle is working just fine.</p>
+        <p class="quote">Most of the time, prices are <b>5 GWei</b> for all speeds. If you came from the Ethereum network, you might find this a little odd. But rest assured, it is just the way BSC works. Our oracle is working just fine.</p>
 
         <h2>Price history</h2>
 
@@ -108,7 +107,7 @@
 
         <pre class="code"><code><a href="https://bscgas.info/gas" target="_blank">https://bscgas.info/gas</a></code></pre>
 
-        <p>The endpoint will answer with a <b>json string</b> with the following format:</p>
+        <p>The endpoint will answer with a <a href="https://en.wikipedia.org/wiki/JSON" target="_blank">JSON string</a> with the following format:</p>
 
         <pre class="code"><code>{
     <span class="json key">"timestamp"</span>: <span class="json string">string</span>,
@@ -122,16 +121,16 @@
 
         <ul>
             <li><code class="code inline">timestamp</code>: An <a href="https://www.w3.org/TR/NOTE-datetime">ISO 8601</a> compliant date for when the API returned the result.</li>
-            <li><code class="code inline">slow</code>: Estimated minimum Gwei to be paid for a transaction that will be safely accepted. This means it can take a while (usually about half an hour).</li>
-            <li><code class="code inline">standard</code>: Estimated gwei paid recently where the transaction was accepted on 60% of the blocks.  It usually take about a minute.</li>
-            <li><code class="code inline">fast</code>: Estimated gwei paid recently where the transaction was accepted on 90% of the blocks. It usually take about 15 seconds.</li>
-            <li><code class="code inline">instant</code>: Estimated gwei needed for the transaction be accepted in the next block. Usually this means you are overpaying.</li>
+            <li><code class="code inline">slow</code>: Estimated minimum Gwei to be paid for a transaction that will be safely accepted. That means it can take a while (usually about half an hour).</li>
+            <li><code class="code inline">standard</code>: Estimated Gwei paid recently where the transaction was accepted on 60% of the blocks.  It usually takes about a minute.</li>
+            <li><code class="code inline">fast</code>: Estimated Gwei paid recently where the transaction was accepted on 90% of the blocks. It usually takes about 15 seconds.</li>
+            <li><code class="code inline">instant</code>: Estimated Gwei needed for the transaction to be accepted in the next block. Usually, this means you are overpaying.</li>
             <li><code class="code inline">block_time</code>: Average time between each block confirmation.</li>
             <li><code class="code inline">last_block</code>: Number of the last block the oracle scanned.</li>
         </ul> 
         
         <p class="quote">Note that if you plan to integrate this API with your application using the <a
-                href="https://github.com/ChainSafe/web3.js" target="_blank" rel="noopener">web3</a> library you
+                href="https://github.com/ChainSafe/web3.js" target="_blank" rel="noopener">web3</a> library, you
             must multiply the value by <code class="code inline">1<sup>9</sup></code> as the library expects the gas price
             in Wei.</p>
 
@@ -139,7 +138,7 @@
 
         <pre class="code"><code id="sample"><i class="fas fa-spin fa-cog"></i></code></pre>
 
-        <p>In case the backend oracle is restarting (it does from time to time), the resquest return an error field as well as the timestamp:</p>
+        <p>In case the backend oracle is restarting (it does from time to time), the request return an error field as well as the timestamp:</p>
 
         <pre class="code"><code>{
     <span class="json key">"timestamp"</span>: <span class="json string">string</span>,
@@ -158,12 +157,12 @@
         <ul>
             <li><code class="code inline">from</code>: <a href="https://www.unixtimestamp.com/" target="_blank">Unix timestamp</a> representing the time where your search will start from. <i>Default 0</i>.</li>
             <li><code class="code inline">to</code>: Unix timestamp representing the time where to finish your search. <i>Default current timestamp</i>.</li>
-            <li><code class="code inline">page</code>: In case your search return more than 1000 candles, you must inform the page of your search you wish to retrieve. <i>Default 1</i>.</li>
+            <li><code class="code inline">page</code>: If your search returns more than 1000 candles, you must inform the page of the search you wish to retrieve. <i>Default 1</i>.</li>
             <li><code class="code inline">candles</code>: How many results (maximum) you wish the search to retrieve. <i>Default 1000</i>.</li>
-            <li><code class="code inline">timeframe</code>: The time you wish to aggregate results to form <a href="https://www.investopedia.com/terms/c/candlestick.asp" target="_blank">candles</a>. The allowed values are <b>10m</b>, <b>30m</b>, <b>1h</b>, <b>2h</b>, <b>4h</b> or <b>1d</b>. You could also inform these values in minutes (10, 30, 60, 120, 240 or 1440). <i>Default 30</i>.</li>
+            <li><code class="code inline">timeframe</code>: The time you wish to aggregate results to form <a href="https://www.investopedia.com/terms/c/candlestick.asp" target="_blank">candles</a>. The allowed values are <b>10m</b>, <b>30m</b>, <b>1h</b>, <b>2h</b>, <b>4h</b> or <b>1d</b>. You could also inform these values in minutes (10, 30, 60, 120, 240, or 1440). <i>Default 30</i>.</li>
         </ul> 
 
-        <p>The API will return an array of <a href="https://www.investopedia.com/terms/c/candlestick.asp" target="_blank">candlesticks</a> built from aggregate data of the requested timeframe. The array is ordered fro decreasing timestamps.</p>
+        <p>The API will return an array of <a href="https://www.investopedia.com/terms/c/candlestick.asp" target="_blank">candlesticks</a> built from aggregate data of the requested timeframe. The array is ordered from decreasing timestamps.</p>
 
         <pre class="code"><code>[
     {
@@ -201,7 +200,7 @@
         <ul>
             <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the candlestick time.</li>
             <li><code class="code inline">samples</code>: Number of samples composing the candle.</li>
-            <li><code class="code inline">instant</code>, <code class="code inline">fast</code>, <code class="code inline">standard</code>, <code class="code inline">slow</code>: Gas price information regarding each speed (check <a href="#endpoint-gas">gas</a> endpoint for explanation about speeds).</li>
+            <li><code class="code inline">instant</code>, <code class="code inline">fast</code>, <code class="code inline">standard</code>, <code class="code inline">slow</code>: Gas price information regarding each speed (check <a href="#endpoint-gas">gas</a> endpoint for an explanation about speeds).</li>
             <li><code class="code inline">open</code>: The gas price reported on the first moment of the candle.</li>
             <li><code class="code inline">close</code>: The gas price reported on the last moment of the candle.</li>
             <li><code class="code inline">low</code>: The lowest gas price reported on the entire candle.</li>
@@ -215,25 +214,22 @@
 
         <div id="codepen"></div>
         
-        <p class="quote">If your API requests are taking a little while to get a response, please keep in mind that the oracle consumes moderate amount of resources and it is running on my own low spec server. Consider a <a class="donate-link">donation</a> to help bscgas to get better quality hardware.</p>
+        <p class="quote">If your API requests take a little while to get a response, please keep in mind that the oracle consumes a moderate amount of resources. It is running on my own low-spec server. Consider a <a class="donate-link">donation</a> to help bscgas to get better quality hardware.</p>
 
         <h2>Credits</h2>
 
-        <p>The backend oracle software providing the gas prices for this website is forked from <a
-            href="https://github.com/JustLiquidity/Gas-Station-BinanceSmartChain" target="_blank" rel="noopener">JustLiquidity
-            </a>, which itself is a fork from <a href="https://github.com/ethgasstation/gasstation-express-oracle"
+        <p>The backend oracle software providing the gas prices for this website is forked from <a href="https://github.com/JustLiquidity/Gas-Station-BinanceSmartChain" target="_blank" rel="noopener">JustLiquidity</a>, a fork from <a href="https://github.com/ethgasstation/gasstation-express-oracle"
             target="_blank" rel="noopener">ethgasstation</a>. All credit to the authors.</p>
 
         <h2>Donations</h2>
 
-        <p>If you liked this website, or if you find the public API endpoint useful in any way, please consider <a
-                class="donate-link">buying me a coffee</a>. It helps paying for the domain, keeps the server running 24/7 and reward my time. Thank you!</p>
+        <p>If you liked this website, or if you find the public API endpoint useful in any way, please consider <a class="donate-link">buying me a coffee</a>. It helps to pay for the domain, keeps the server running 24/7, and rewards my time. Thank you!</p>
 
         <h2>Feedback</h2>
                 
-        <p>Don't want or can't donate. No problem! You can help us by providing your feedback. In case there is something wrong,
-            missing, or you wish to see here, just reach us on our <a href="https://twitter.com/bscgas" target="_blank" rel="noopener">twitter</a> page or <a
-            href="https://t.me/bscgas_info" target="_blank" rel="noopener">telegram</a> group.</p>
+        <p>Don't want or can't donate. No problem! You can help us by providing your feedback. If there is something wrong,
+            missing, or you wish to see here, reach us on our <a href="https://twitter.com/bscgas" target="_blank" rel="noopener">Twitter</a> page or <a
+            href="https://t.me/bscgas_info" target="_blank" rel="noopener">Telegram</a> group.</p>
     </div>
 
     <footer>
