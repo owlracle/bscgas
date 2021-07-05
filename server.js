@@ -12,7 +12,7 @@ const app = express();
 let port = 4200;
 let saveDB = true;
 
-const USAGE_LIMIT = 100;
+const USAGE_LIMIT = 1000000;
 const REQUEST_COST = 5;
 
 // receive args
@@ -204,7 +204,8 @@ app.put('/keys/:key', async (req, res) => {
 // get api usage logs
 app.get('/logs/:key', cors(corsOptions), async (req, res) => {
     const key = req.params.key;
-    const timeframe = req.query.timeframe || 60;
+    const toTime = req.query.totime || 'UNIX_TIMESTAMP(now())';
+    const fromTime = req.query.fromtime || `${toTime} - 3600`;
 
     if (!key.match(/^[a-f0-9]{32}$/)){
         res.status(400);
@@ -240,7 +241,7 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
             else {
                 const id = row[0].id;
 
-                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE timestamp > now(3) - INTERVAL ${timeframe} MINUTE AND apiKey = '${id}' ORDER BY timestamp DESC`);
+                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ${fromTime} AND UNIX_TIMESTAMP(timestamp) <= ${toTime} AND apiKey = '${id}' ORDER BY timestamp DESC`);
 
                 if (error){
                     res.status(500);
@@ -441,7 +442,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             message: 'You must get behind a public ip address or use an api key.'
         });
     }
-    else if (usage.ip >= USAGE_LIMIT){
+    else if (!key && usage.ip >= USAGE_LIMIT){
         res.status(403);
         res.send({
             status: 403,
@@ -462,7 +463,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
         try {
             const data = await requestOracle();
 
-            if (key && usage.apiKey >= USAGE_LIMIT){
+            if (key && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
                 // reduce credits
                 credit -= REQUEST_COST;
                 const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ${sqlData.apiKey}`);
@@ -581,9 +582,10 @@ app.listen(port, () => {
 });
 
 async function requestOracle(){
-    // return new Promise(resolve => resolve({data: JSON.stringify({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408})}));
-    return (await fetch('http://127.0.0.1:8097')).json();
-    // sample data: {"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}
+    if (configFile.production){
+        return (await fetch('http://127.0.0.1:8097')).json();
+    }
+    return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));
 }
 
 // get prices to build database with price history
@@ -612,11 +614,13 @@ async function buildHistory(){
     }
 }
 
-if (saveDB){
+if (saveDB && configFile.production){
     buildHistory();
 }
 
-app.get('/tx/:key', cors(corsOptions), async (req, res) => {
+
+// request credit info
+app.get('/credit/:key', async (req, res) => {
     const key = req.params.key;
 
     if (!key.match(/^[a-f0-9]{32}$/)){
@@ -651,15 +655,103 @@ app.get('/tx/:key', cors(corsOptions), async (req, res) => {
                 });
             }
             else {
+                const [rows, error] = await db.query(`SELECT tx, timestamp, value, fromWallet FROM credit_recharges WHERE apiKey = ${row[0].id} ORDER BY timestamp DESC`);
+
+                if (error){
+                    res.status(500);
+                    res.send({
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while retrieving your credit information.',
+                        serverMessage: error,
+                    });
+                }
+                else {
+                    res.send({
+                        message: 'success',
+                        results: rows
+                    });
+                }
+            }
+        }
+    }
+
+});
+
+
+// update credit
+app.put('/credit/:key', async (req, res) => {
+    const key = req.params.key;
+
+    if (!key.match(/^[a-f0-9]{32}$/)){
+        res.status(400);
+        res.send({
+            status: 400,
+            error: 'Bad Request',
+            message: 'The informed api key is invalid.'
+        });
+    }
+    else {
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`,);
+
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to search the database for your api key.',
+                serverMessage: error,
+            });
+        }
+        else {
+            const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+    
+            if (row.length == 0){
+                res.status(401);
+                res.send({
+                    status: 401,
+                    error: 'Unauthorized',
+                    message: 'Could not find your api key.'
+                });
+            }
+            else {
+                const id = row[0].id;
                 const wallet = row[0].wallet;
-                const block = row[0].blockChecked - 10;
+                const block = row[0].blockChecked + 1;
 
-                const txs = await bscscan.getTx(wallet, block);
-                // from this point we need to get the txs and update credits
+                const data = {};
+                data.api_keys = { credit: row[0].credit };
+                data.api_keys.blockChecked = await bscscan.getBlockHeight();
+                
+                const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
 
-                const blockNow = await bscscan.getBlockHeight();
+                data.credit_recharges = {
+                    tx: [],
+                    value: [],
+                    timestamp: [],
+                    fromWallet: [],
+                    apiKey: [],
+                };
+                
+                if (txs.status == "1"){
+                    txs.result.forEach(tx => {
+                        if (tx.isError == "0" && tx.to.toLowerCase() == wallet.toLowerCase()){
+                            // 33122453711370938 == 0.03312245371137 BNB
+                            // const value = 50000000000;
+                            const value = parseInt(tx.value.slice(0,-10));
+                            data.api_keys.credit = parseInt(data.api_keys.credit) + value;
 
-                db.update('api_keys', { blockChecked: blockNow }, `id = ${row[0].id}`);
+                            data.credit_recharges.tx.push(tx.hash);
+                            data.credit_recharges.value.push(value);
+                            data.credit_recharges.timestamp.push(parseInt(tx.timeStamp));
+                            data.credit_recharges.fromWallet.push(tx.from);
+                            data.credit_recharges.apiKey.push(id);
+                        }
+                    })
+                }
+                
+                db.update('api_keys', data.api_keys, `id = ${id}`);
+                db.insert('credit_recharges', data.credit_recharges, { timestamp: `UNIX_TIMESTAMP({{}})` });
 
                 res.send(txs);
             }
@@ -676,8 +768,12 @@ const db = {
     // {field_1: 0, field_2: 'a'}
     // or
     // {field_1: [0,1,2], field_2: ['a', 'b', 'c']}
-    insert: async function(table, obj){
-        const fields = Object.keys(obj).join(',');
+    // format is required if you want a field to be inserted in a format different than string.
+    //     you should inform an object:
+    //     { field_1: `prefix{{}}suffix` }
+    //     use {{}} to inform where the value will be inserted
+    insert: async function(table, obj, format){
+        let fields = Object.keys(obj);
         const values = Object.values(obj).map(e => Array.isArray(e) ? e : [e]);
 
         let valuesRow = [];
@@ -689,10 +785,19 @@ const db = {
                 if (valuesRow[e].length == f){
                     valuesRow[e].push([]);
                 }
-                valuesRow[e][f] = values[f][e];
+
+                let value = `'${values[f][e]}'`;
+                if (Object.keys(format).includes(fields[f])){
+                    const formatString = format[fields[f]].split('{{}}');
+                    value = [ formatString[0], values[f][e], formatString[1] ].join('');
+                }
+
+                valuesRow[e][f] = value;
             }
         }
-        valuesRow = valuesRow.map(r => `(${ r.map(e => `'${e}'`).join(',') })`).join(',');
+
+        fields = fields.join(',');
+        valuesRow = valuesRow.map(r => `(${ r.join(',') })`).join(',');
         const sql = `INSERT INTO ${table} (${fields}) VALUES ${valuesRow}`;
 
         return this.query(sql);
@@ -725,7 +830,7 @@ const bscscan = {
         return parseInt(block.result);
     },
 
-    getTx: async function(wallet, from){
-        return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&apikey=${this.apiKey}`)).json();
+    getTx: async function(wallet, from, to){
+        return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&endblock=${to}&apikey=${this.apiKey}`)).json();
     }
 };

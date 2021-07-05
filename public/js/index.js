@@ -594,6 +594,7 @@ document.querySelector('#codepen').innerHTML = codepenEmbed.split('{{THEME}}').j
 import('https://cpwebassets.codepen.io/assets/embed/ei.js');
 
 
+// post method for testing purposes
 // window.post = async function(url, args) {
 //     const response = await fetch(url, {
 //         method: args.method || 'POST',
