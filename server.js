@@ -434,14 +434,14 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
         res.status(resp.error.status);
         res.send(resp.error);
     }
-    else if (!usage.ip && !key){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You must get behind a public ip address or use an api key.'
-        });
-    }
+    // else if (!usage.ip && !key){
+    //     res.status(403);
+    //     res.send({
+    //         status: 403,
+    //         error: 'Forbidden',
+    //         message: 'You must get behind a public ip address or use an api key.'
+    //     });
+    // }
     else if (!key && usage.ip >= USAGE_LIMIT){
         res.status(403);
         res.send({
@@ -548,7 +548,7 @@ app.get('/history', cors(corsOptions), async (req, res) => {
 
     const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
     
-    const [rows, error] = await db.query(`SELECT p.timestamp, ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(p.timestamp) BETWEEN '${req.query.from || 0}' AND '${req.query.to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(p.timestamp) DIV ${timeframe * 60} ORDER BY p.timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
+    const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${req.query.from || 0}' AND '${req.query.to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
 
     if (error){
         res.status(500);
@@ -812,14 +812,6 @@ const db = {
     },
 };
 db.connection = mysql.createConnection(configFile.mysql);
-
-// https://api.bscscan.com/api?module=account&action=txlist&address=0xBB512Ff07Dcb062Aeb31ade8dECbeD3C4A89ceF1&startblock=8500000&endblock=8960295&sort=asc&apikey=7GM7EHRDJQUIC8MDAKU9MP9R678F21C2N3
-// result[i]
-// blockNumber: onde começar a ler na proxima vez
-// from: de onde veio
-// to: confirmar que é esta carteira a receptora
-// value: valor recebido 33122453711370938 == 0.03312245371137 BNB
-// isError == 0 deu certo
 
 const bscscan = {
     apiKey: configFile.bscscan,
