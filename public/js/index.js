@@ -603,3 +603,90 @@ import('https://cpwebassets.codepen.io/assets/embed/ei.js');
 //     });
 //     return response.json();
 // }
+
+const api = {
+    showModal: function(){
+        const fog = document.createElement('div');
+        fog.id = 'fog';
+        fog.innerHTML = `<div id='new-api-window'>
+            <h2>New API key</h2>
+            <p class="title">Origin <i class="far fa-question-circle"></i></p>
+            <input type="text" class="input-text" id="origin" placeholder="mywebsite.com">
+            <p class="title">Note <i class="far fa-question-circle"></i></p>
+            <input type="text" class="input-text" id="note" placeholder="My personal note for this key">
+            <div id="checkbox-container">
+                <label>
+                    <input type="checkbox">
+                    <span>I agree to not share any of my API key information with others.</span>
+                </label>
+                <label>
+                    <input type="checkbox">
+                    <span>I am aware that front-end code is publicly readable and exposing my API key on it is the same as sharing them.</span>
+                </label>
+            </div>
+            <div id="button-container"><button id="create-key" disabled>Create API key</button></div>
+        </div>`;
+
+        
+        fog.addEventListener('click', () => fog.remove());
+        fog.querySelector('div').addEventListener('click', e => e.stopPropagation());
+        
+        document.body.appendChild(fog);
+        fadeIn(fog, 500);
+
+        fog.querySelectorAll('#checkbox-container input').forEach(e => e.addEventListener('click', () => {
+            if (Array.from(fog.querySelectorAll('#checkbox-container input')).filter(e => e.checked).length == 2){
+                fog.querySelector('#create-key').removeAttribute('disabled');
+            }
+            else {
+                fog.querySelector('#create-key').setAttribute('disabled', true);
+            }
+        }));
+
+        fog.querySelector('#create-key').addEventListener('click', async function() {
+            this.setAttribute('disabled', true);
+            this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
+
+            const body = {};
+            if (fog.querySelector('#origin').value.length){
+                body.origin = fog.querySelector('#origin').value;
+            }
+            if (fog.querySelector('#note').value.length){
+                body.note = fog.querySelector('#note').value;
+            }
+
+            const data = await (await fetch('/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            })).json();
+            if (data.apiKey){
+                fog.querySelector('#new-api-window').innerHTML = `<h2>API key Created</h2>
+                    <p class="title">API Key</p>
+                    <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
+                    <p class="title">API Secret</p>
+                    <input type="text" class="input-text keys" value="${data.secret}" readonly>
+                    <p class="title">Wallet</p>
+                    <input type="text" class="input-text keys" value="${data.wallet}" readonly>
+                    <ul>
+                        <li>Make sure to save this information before closing this window.</li>
+                        <li>We dont store your key and secret in plain text.</li>
+                    </ul>
+                    <div id="button-container"><button id="close">OK</button></div>
+                `;
+
+                fog.querySelector('#close').addEventListener('click', () => fog.remove());
+            }
+            else{
+                console.log(data);
+            }
+        })
+
+        const titleInfo = [
+            'Informing an origin restrict the use of your API key to only the designated domain. It is highly reccomended for preventing unauthorized calls using your key.',
+            'You could set a note to your key for informative purposes.',
+        ];
+        fog.querySelectorAll('.title i').forEach((e,i) => new Tooltip(e, titleInfo[i]));
+    },
+};
+document.querySelector('#new-apikey').addEventListener('click', () => api.showModal());
