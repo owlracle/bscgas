@@ -539,7 +539,12 @@ const gasTimer = {
 
     update: async function() {
         const startTime = new Date();
-        const data = await (await fetch('/gas')).json();
+        // --- NOTICE ---.
+        // This endpoint returns a cached information retieved from oracle every 30 seconds.
+        // There is no point in making your app consume this endpoint as a way to overcome the api limits. You will be getting "old" data.
+        // Instead, use your own api key every 30-60 seconds, cache the response in your server, then deliver to your users when they request your server. Check the api request limits and you will be able to keep using this service for free.
+        // Check the docs for more info.
+        const data = await (await fetch('/gascached')).json();
         const requestTime = new Date() - startTime;
 
         const speedList = ['slow', 'standard', 'fast', 'instant'];
@@ -612,6 +617,7 @@ const api = {
             <h2>New API key</h2>
             <p class="title">Origin <i class="far fa-question-circle"></i></p>
             <input type="text" class="input-text" id="origin" placeholder="mywebsite.com">
+            <span id="origin-tip"></span>
             <p class="title">Note <i class="far fa-question-circle"></i></p>
             <input type="text" class="input-text" id="note" placeholder="My personal note for this key">
             <div id="checkbox-container">
@@ -643,50 +649,109 @@ const api = {
             }
         }));
 
-        fog.querySelector('#create-key').addEventListener('click', async function() {
-            this.setAttribute('disabled', true);
-            this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
+        const urlRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
+        fog.querySelector('#origin').addEventListener('keyup', () => {
+            
+            const value = fog.querySelector('#origin').value.trim().toLowerCase();
+            const match = value.match(urlRegex);
+            if (match && match.length > 1){
+                const tip = fog.querySelector('#origin-tip');
+                tip.classList.remove('red');
+                tip.innerHTML = '';
+                fog.querySelector('#origin').classList.remove('red');
+            }
+        })
 
+        fog.querySelector('#create-key').addEventListener('click', function() {
             const body = {};
+            let error = false;
             if (fog.querySelector('#origin').value.length){
-                body.origin = fog.querySelector('#origin').value;
+                // make sure origin informed is only then domain name
+                const value = fog.querySelector('#origin').value.trim().toLowerCase();
+                const match = value.match(urlRegex);
+                if (match && match.length > 1){
+                    body.origin = value;
+                }
+                else{
+                    const tip = fog.querySelector('#origin-tip');
+                    tip.innerHTML = 'Invalid domain';
+                    tip.classList.add('red');
+                    fog.querySelector('#origin').classList.add('red');
+                    error = true;
+                }
             }
             if (fog.querySelector('#note').value.length){
-                body.note = fog.querySelector('#note').value;
+                body.note = fog.querySelector('#note').value.trim();
             }
 
-            const data = await (await fetch('/keys', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            })).json();
-            if (data.apiKey){
-                fog.querySelector('#new-api-window').innerHTML = `<h2>API key Created</h2>
-                    <p class="title">API Key</p>
-                    <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
-                    <p class="title">API Secret</p>
-                    <input type="text" class="input-text keys" value="${data.secret}" readonly>
-                    <p class="title">Wallet</p>
-                    <input type="text" class="input-text keys" value="${data.wallet}" readonly>
-                    <ul>
-                        <li>Make sure to save this information before closing this window.</li>
-                        <li>We dont store your key and secret in plain text.</li>
-                    </ul>
-                    <div id="button-container"><button id="close">OK</button></div>
-                `;
-
-                fog.querySelector('#close').addEventListener('click', () => fog.remove());
-            }
-            else{
-                console.log(data);
+            if (!error){
+                this.setAttribute('disabled', true);
+                this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
+    
+                api.createKey(body);
             }
         })
 
         const titleInfo = [
-            'Informing an origin restrict the use of your API key to only the designated domain. It is highly reccomended for preventing unauthorized calls using your key.',
+            'Informing an origin restrict the use of your API key to only the designated domain. It is highly recommended for preventing unauthorized calls using your key.',
             'You could set a note to your key for informative purposes.',
         ];
         fog.querySelectorAll('.title i').forEach((e,i) => new Tooltip(e, titleInfo[i]));
     },
+
+    createKey: async function(body) {
+        const data = await (await fetch('/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })).json();
+
+        if (data.apiKey){
+            const modal = document.querySelector('#fog #new-api-window');
+            modal.innerHTML = `<h2>API key Created</h2>
+                <p class="title">API Key</p>
+                <div class="copy-container">
+                    <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
+                    <div class="copy"><i class="far fa-copy"></i></div>
+                </div>
+                <p class="title">API Secret</p>
+                <div class="copy-container">
+                    <input type="text" class="input-text keys" value="${data.secret}" readonly>
+                    <div class="copy"><i class="far fa-copy"></i></div>
+                </div>
+                <p class="title">Wallet</p>
+                <div class="copy-container">
+                    <input type="text" class="input-text keys" value="${data.wallet}" readonly>
+                    <div class="copy"><i class="far fa-copy"></i></div>
+                </div>
+                <ul>
+                    <li>Make sure to save this information before closing this window.</li>
+                    <li>We do not store your key and secret in plain text, so we cannot recover them in case of loss.</li>
+                </ul>
+                <div id="button-container"><button id="close">OK</button></div>
+            `;
+            // add buttons for clipboard copy info
+
+            modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
+
+            modal.querySelectorAll('.copy').forEach(e => e.addEventListener('click', function(){
+                const parent = this.closest('.copy-container');
+                api.copyText(parent);
+            }));
+        }
+        else{
+            console.log(data);
+        }
+    },
+
+    copyText: function(parent){
+        const input = parent.querySelector('input');
+        const oldText = input.value;
+        input.value = `COPIED`;
+        
+        setTimeout(() => input.value = oldText, 500);
+
+        navigator.clipboard.writeText(oldText);
+    }
 };
 document.querySelector('#new-apikey').addEventListener('click', () => api.showModal());

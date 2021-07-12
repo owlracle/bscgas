@@ -6,7 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
 
-const configFile = JSON.parse(fs.readFileSync(__dirname  + '/config.json'));
+const configFile = JSON.parse(fs.readFileSync(`${__dirname}/config.json`));
 
 const app = express();
 let port = 4200;
@@ -14,6 +14,8 @@ let saveDB = true;
 
 const USAGE_LIMIT = 1000000;
 const REQUEST_COST = 5;
+
+const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
 
 // receive args
 process.argv.forEach((val, index, array) => {
@@ -29,7 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.sendFile(`public/html/index.html`, { root: __dirname });
+    res.sendFile(`${__dirname}/public/html/index.html`);
 });
 
 const corsOptions = {
@@ -62,7 +64,10 @@ app.post('/keys', async (req, res) => {
         };
     
         if (req.body.origin){
-            data.origin = req.body.origin;
+            const match = req.body.origin.match(originRegex);
+            if (match && match.length > 1){
+                data.origin = match[1];
+            }
         }
         if (req.body.note){
             data.note = req.body.note;
@@ -381,7 +386,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
     let keyPromise = true;
     if (key){
         keyPromise = new Promise(async resolve => {
-            const [rows, error] = await db.query(`SELECT id, apiKey, credit FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+            const [rows, error] = await db.query(`SELECT id, apiKey, credit, origin FROM api_keys WHERE peek = '${key.slice(-4)}'`);
 
             if (error){
                 resp.error = {
@@ -406,21 +411,45 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
                 else{
                     sqlData.apiKey = row[0].id;
                     credit = row[0].credit;
+                    
+                    let originAllow = true;
+                    const apiOrigin = row[0].origin;
+                    if (apiOrigin){
+                        if (req.header('Origin')){
+                            const realOrigin = req.header('Origin').match(originRegex)[1];
+                            if (apiOrigin != realOrigin){
+                                originAllow = false;
+                            }
+                        }
+                        else{
+                            originAllow = false;
+                        }
+                    }
 
-                    // discorver usage from api key
-                    const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`);
-
-                    if (error){
-                        resp.error = {
-                            status: 500,
-                            error: 'Internal Server Error',
-                            message: 'Error while trying to discover your api usage.',
-                            serverMessage: error,
-                        };
+                    if (originAllow) {
+                        // discorver usage from api key
+                        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`);
+    
+                        if (error){
+                            resp.error = {
+                                status: 500,
+                                error: 'Internal Server Error',
+                                message: 'Error while trying to discover your api usage.',
+                                serverMessage: error,
+                            };
+                        }
+                        else {
+                            usage.apiKey = rows[0].total;
+                        }
                     }
                     else {
-                        usage.apiKey = rows[0].total;
+                        resp.error = {
+                            status: 403,
+                            error: 'Forbidden',
+                            message: 'The API key your are using does not allow calls from this origin.',
+                        };
                     }
+
                     resolve(true);
             
                 }
@@ -434,20 +463,20 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
         res.status(resp.error.status);
         res.send(resp.error);
     }
-    // else if (!usage.ip && !key){
-    //     res.status(403);
-    //     res.send({
-    //         status: 403,
-    //         error: 'Forbidden',
-    //         message: 'You must get behind a public ip address or use an api key.'
-    //     });
-    // }
+    else if (!usage.ip && !key){
+        res.status(403);
+        res.send({
+            status: 403,
+            error: 'Forbidden',
+            message: 'You must get behind a public ip address or use an API key.'
+        });
+    }
     else if (!key && usage.ip >= USAGE_LIMIT){
         res.status(403);
         res.send({
             status: 403,
             error: 'Forbidden',
-            message: 'You have reached the ip address request limit. Try using an api key.'
+            message: 'You have reached the ip address request limit. Try using an API key.'
         });
     }
     else if (key && credit < 0){
@@ -527,6 +556,41 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
     }
     
 });
+
+
+app.get('/gascached', async (req, res) => {
+    const cache = JSON.parse(fs.readFileSync(`${__dirname}/cached_gas.json`));
+    res.send(cache);
+});
+
+async function cacheGas(){
+    try{
+        const data = await requestOracle();
+
+        if (data.standard){
+            const resp = {};
+            resp.timestamp = new Date().toISOString();
+            resp.slow = data.safeLow;
+            resp.standard = data.standard;
+            resp.fast = data.fast;
+            resp.instant = data.fastest;
+            resp.block_time = data.block_time;
+            resp.last_block = data.blockNum;
+
+            fs.writeFileSync(`${__dirname}/cached_gas.json`, JSON.stringify(resp));
+        }
+        else {
+            throw new Error('Could not get information from oracle.');
+        }
+    }
+    catch (error) {
+        console.log(error);
+    }
+    finally {
+        setTimeout(() => cacheGas(), 1000 * 30); // 30 secs
+    }
+}
+cacheGas();
 
 
 app.get('/history', cors(corsOptions), async (req, res) => {

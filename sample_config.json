@@ -1,5 +1,5 @@
 {
-    "bscscan": "API_KEY",
+    "bscscan": "BSCSCAN_API_KEY",
     "mysql": {
         "user": "USER",
         "host": "HOST",
