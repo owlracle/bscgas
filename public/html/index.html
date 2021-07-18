@@ -103,13 +103,13 @@
 
         <p>If you are a software developer, and want to integrate your application with our gas price oracle, you could generate an API key and start using our endpoints. For more information about API keys, <a href="#faq">read our FAQ</a>.</p>
 
-        <div id="apikey-container"><button id="new-apikey">Generate new API key</button></div>
+        <div id="apikey-container"><button id="manage-apikey"><i class="fas fa-key"></i>Manage API keys</button></div>
 
         <h3 id="endpoint-gas">Gas price estimation</h3>
 
         <p>You could also retrieve the gas price estimations through our API endpoint:</p>
 
-        <pre class="code"><code><a href="https://bscgas.info/gas" target="_blank">https://bscgas.info/gas</a></code></pre>
+        <pre class="code"><code><a href="/gas" target="_blank">https://bscgas.info/gas</a></code></pre>
 
         <p>The endpoint will answer with a <a href="https://en.wikipedia.org/wiki/JSON" target="_blank">JSON string</a> with the following format:</p>
 
@@ -154,7 +154,7 @@
 
         <p>In case you need to retrieve the gas price history, you could fetch the <b>history</b> endpoint:</p>
 
-        <pre class="code"><code><a href="https://bscgas.info/history" target="_blank">https://bscgas.info/history</a></code></pre>
+        <pre class="code"><code><a href="/history" target="_blank">https://bscgas.info/history</a></code></pre>
 
         <p>You could pass the following arguments in a GET request:</p>
 
@@ -281,5 +281,3 @@
 <!-- TODO: -->
 <!-- Retrieve gas paid so we can estimate cost in bnb/usd per transaction -->
 <!-- When we get a decent amount of API calls, ask for partners for ads -->
-<!-- When API calls get a problem, implement a quota -->
-<!-- Public API endpoint only for this domain. CORS and ip limited. Max 10 calls/min-->

@@ -314,7 +314,7 @@ body {
             justify-content: center;
             margin-top: 35px;
 
-            #new-apikey {
+            #manage-apikey {
                 height: 50px;
                 width: 100%;
                 max-width: 300px;
@@ -330,6 +330,10 @@ body {
 
                 &:hover {
                     filter: invert(10%);
+                }
+
+                i {
+                    margin-right: 10px;
                 }
             }
         }
@@ -745,149 +749,193 @@ body {
             }
         }
 
-        #new-api-window {
+        #api-window {
             background-color: var(--bg-color);
             color: var(--text-color);
             border-radius: 3px;
             width: 100%;
             max-width: 400px;
-            padding: 20px 30px;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
             border-color: var(--border-color);
             box-shadow: 2px 2px 5px black;
-
-            h2 {
-                margin: 10px 0 20px 0;
-            }
-
-            .input-text {
-                padding: 10px 15px;
-                margin-bottom: 15px;
-                border-radius: 3px;
-                background-color: var(--bg-intense-color);
-                border: none;
-                color: var(--text-intense-color);
-                outline: none;
-                font-size: 1rem;
-
-                &.keys {
-                    font-family: monospace;
-                }
-
-                &.red {
-                    border: 1px solid #cc0000;
-                }
-            }
-
-            .copy-container {
+            
+            #tab-container {
                 display: flex;
-                justify-content: space-between;
-
-                input {
-                    flex-grow: 1;
-                    border-radius: 3px 0 0 3px;
-                }
-
-                .copy {
-                    width: 35px;
+                justify-content: space-around;
+                
+                .tab {
+                    background-color: var(--bg-intense-color);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background-color: var(--bg-intense-color);
-                    color: var(--text-intense-color);
-                    margin-bottom: 15px;
-                    border-radius: 0 3px 3px 0;
-                    filter: invert(0.2);
+                    padding: 15px 0 10px 0;
+                    width: 33.33%;
                     cursor: pointer;
                     transition: 0.3s all;
+                    
+                    &.active {
+                        background-color: var(--bg-color);
+                        cursor: default;
+                        text-shadow: 2px 1px 3px #cc4b13;
+                    }
 
-                    &:hover {
-                        filter: invert(0.3);
+                    i {
+                        margin-right: 10px;
                     }
                 }
             }
-
-            #origin-tip {
-                font-size: 0.8rem;
-                height: 20px;
+            
+            #content {
                 display: flex;
-                align-items: center;
-                margin: -10px 0 5px 15px;
-                opacity: 0.7;
+                flex-direction: column;
+                padding: 20px 30px;
 
-                &.red {
-                    color: red;
-                    opacity: 1;
+                h2 {
+                    margin: 10px 0 20px 0;
                 }
-            }
-
-            .title {
-                font-size: 0.9rem;
-                margin: 10px 0 10px 5px;
-                opacity: 0.7;
-
-                i {
-                    margin-left: 5px;
+    
+                .input-text {
+                    padding: 10px 15px;
+                    margin-bottom: 15px;
+                    border-radius: 3px;
+                    background-color: var(--bg-intense-color);
+                    border: none;
                     color: var(--text-intense-color);
-                    cursor: pointer;
-                }
-            }
+                    outline: none;
+                    border: 1px solid transparent;
+                    font-size: 1rem;
+                    transition: 0.3s all;
+    
+                    &:focus {
+                        border-color: var(--border-color);
+                    }
 
-            #checkbox-container {
-                margin: 10px 0;
-                label {
-                    display: flex;
-                    align-items: center;
-                    margin-bottom: 10px;
-                    transition: 0.2s all;
-                    cursor: pointer;
-
-                    &:hover {
-                        text-shadow: 0px 0px 0px var(--text-intense-color);
+                    &.keys {
+                        font-family: monospace;
                     }
     
-                    input {
-                        transform: scale(1.6);
-                        flex-shrink: 0;
-                    }
-                    
-                    span {
-                        margin-left: 10px;
+                    &.red {
+                        border-color: #cc0000;
                     }
                 }
-            }
-
-            ul {
-                padding-left: 25px;
-            }
-
-            #button-container {
-                display: flex;
-                justify-content: center;
-                margin-top: 15px;
-
-                button {
-                    border: none;
-                    border-radius: 3px;
-                    height: 35px;
-                    width: 200px;
-                    outline: none;
-                    background-color: var(--bg-intense-color);
-                    color: var(--text-intense-color);
-                    cursor: pointer;
-                    transition: 0.3s all;
-                    font-size: 1.1rem;
-
-                    &:hover {
-                        box-shadow: 0px 0px 3px var(--text-color);
+    
+                .copy-container {
+                    display: flex;
+                    justify-content: space-between;
+    
+                    input {
+                        flex-grow: 1;
+                        border-radius: 3px 0 0 3px;
                     }
+    
+                    .copy {
+                        width: 35px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background-color: var(--bg-intense-color);
+                        color: var(--text-intense-color);
+                        margin-bottom: 15px;
+                        border-radius: 0 3px 3px 0;
+                        filter: invert(0.2);
+                        cursor: pointer;
+                        transition: 0.3s all;
+    
+                        &:hover {
+                            filter: invert(0.3);
+                        }
+                    }
+                }
+    
+                .tip {
+                    font-size: 0.8rem;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                    margin: -10px 0 5px 15px;
+                    opacity: 0.7;
+                    transition: 0.3s all;
+    
+                    &.red {
+                        color: red;
+                        opacity: 1;
+                    }
+                }
+    
+                .title {
+                    font-size: 0.9rem;
+                    margin: 10px 0 10px 5px;
+                    opacity: 0.7;
+                    text-transform: capitalize;
+    
+                    i {
+                        margin-left: 5px;
+                        color: var(--text-intense-color);
+                        cursor: pointer;
+                    }
+                }
+    
+                #checkbox-container {
+                    margin: 10px 0;
+                    label {
+                        display: flex;
+                        align-items: center;
+                        margin-bottom: 10px;
+                        transition: 0.2s all;
+                        cursor: pointer;
+    
+                        &:hover {
+                            text-shadow: 0px 0px 0px var(--text-intense-color);
+                        }
+        
+                        input {
+                            transform: scale(1.6);
+                            flex-shrink: 0;
+                        }
+                        
+                        span {
+                            margin-left: 10px;
 
-                    &:disabled {
-                        background-color: #9c9c9c;
-                        box-shadow: none;
-                        cursor: default;
+                            div {
+                                margin-bottom: 5px;
+                            }
+                        }
+                    }
+                }
+    
+                ul {
+                    padding-left: 25px;
+                }
+    
+                #button-container {
+                    display: flex;
+                    justify-content: center;
+                    margin-top: 15px;
+    
+                    button {
+                        border: none;
+                        border-radius: 3px;
+                        height: 35px;
+                        width: 200px;
+                        outline: none;
+                        background-color: var(--bg-intense-color);
+                        color: var(--text-intense-color);
+                        cursor: pointer;
+                        transition: 0.3s all;
+                        font-size: 1.1rem;
+                        margin: 0 5px;
+    
+                        &:hover {
+                            box-shadow: 0px 0px 3px var(--text-color);
+                        }
+    
+                        &:disabled {
+                            background-color: #9c9c9c;
+                            box-shadow: none;
+                            cursor: default;
+                        }
                     }
                 }
             }

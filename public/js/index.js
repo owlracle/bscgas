@@ -613,75 +613,96 @@ const api = {
     showModal: function(){
         const fog = document.createElement('div');
         fog.id = 'fog';
-        fog.innerHTML = `<div id='new-api-window'>
-            <h2>New API key</h2>
-            <p class="title">Origin <i class="far fa-question-circle"></i></p>
-            <input type="text" class="input-text" id="origin" placeholder="mywebsite.com">
-            <span id="origin-tip"></span>
-            <p class="title">Note <i class="far fa-question-circle"></i></p>
-            <input type="text" class="input-text" id="note" placeholder="My personal note for this key">
-            <div id="checkbox-container">
-                <label>
-                    <input type="checkbox">
-                    <span>I agree to not share any of my API key information with others.</span>
-                </label>
-                <label>
-                    <input type="checkbox">
-                    <span>I am aware that front-end code is publicly readable and exposing my API key on it is the same as sharing them.</span>
-                </label>
+        fog.innerHTML = `<div id='api-window'>
+            <div id='tab-container'>
+                <div class="tab" id="info"><i class="fas fa-eye"></i>Key Info</div>
+                <div class="tab" id="edit"><i class="fas fa-edit"></i>Edit Key</div>
+                <div class="tab" id="create"><i class="fas fa-plus"></i>Create Key</div>
             </div>
-            <div id="button-container"><button id="create-key" disabled>Create API key</button></div>
+            <div id='content'></div>
         </div>`;
 
-        
+        const tabsContent = Object.fromEntries(['info', 'edit', 'create'].map(e => [e, (() => {
+            const elem = document.createElement('div');
+            elem.id = 'content';
+            return elem;
+        })()]));
+
+        fog.querySelectorAll('.tab').forEach(e => e.addEventListener('click', () => {
+            if (!e.classList.contains('active')){
+                fog.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+                e.classList.add('active');
+            }
+            const content = fog.querySelector(`#content`);
+            content.replaceWith(tabsContent[e.id]);
+        }));
+
         fog.addEventListener('click', () => fog.remove());
         fog.querySelector('div').addEventListener('click', e => e.stopPropagation());
-        
+
         document.body.appendChild(fog);
         fadeIn(fog, 500);
 
-        fog.querySelectorAll('#checkbox-container input').forEach(e => e.addEventListener('click', () => {
-            if (Array.from(fog.querySelectorAll('#checkbox-container input')).filter(e => e.checked).length == 2){
-                fog.querySelector('#create-key').removeAttribute('disabled');
+        // create api key modal
+        tabsContent.create.innerHTML = `<h2>New API key</h2>
+        <p class="title origin">Origin <i class="far fa-question-circle"></i></p>
+        <input type="text" class="input-text" id="origin" placeholder="mywebsite.com">
+        <span id="origin-tip" class="tip"></span>
+        <p class="title note">Note <i class="far fa-question-circle"></i></p>
+        <input type="text" class="input-text" id="note" placeholder="My personal note for this key">
+        <div id="checkbox-container">
+            <label>
+                <input type="checkbox">
+                <span>I agree to not share any of my API key information with others.</span>
+            </label>
+            <label>
+                <input type="checkbox">
+                <span>I am aware that front-end code is publicly readable and exposing my API key on it is the same as sharing them.</span>
+            </label>
+        </div>
+        <div id="button-container"><button id="create-key" disabled>Create API key</button></div>`;
+                
+        tabsContent.create.querySelectorAll('#checkbox-container input').forEach(e => e.addEventListener('click', () => {
+            if (Array.from(tabsContent.create.querySelectorAll('#checkbox-container input')).filter(e => e.checked).length == 2){
+                tabsContent.create.querySelector('#create-key').removeAttribute('disabled');
             }
             else {
-                fog.querySelector('#create-key').setAttribute('disabled', true);
+                tabsContent.create.querySelector('#create-key').setAttribute('disabled', true);
             }
         }));
 
         const urlRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
-        fog.querySelector('#origin').addEventListener('keyup', () => {
-            
-            const value = fog.querySelector('#origin').value.trim().toLowerCase();
+        tabsContent.create.querySelector('#origin').addEventListener('keyup', () => {
+            const value = tabsContent.create.querySelector('#origin').value.trim().toLowerCase();
             const match = value.match(urlRegex);
             if (match && match.length > 1){
-                const tip = fog.querySelector('#origin-tip');
+                const tip = tabsContent.create.querySelector('#origin-tip');
                 tip.classList.remove('red');
                 tip.innerHTML = '';
-                fog.querySelector('#origin').classList.remove('red');
+                tabsContent.create.querySelector('#origin').classList.remove('red');
             }
         })
 
-        fog.querySelector('#create-key').addEventListener('click', function() {
+        tabsContent.create.querySelector('#create-key').addEventListener('click', function() {
             const body = {};
             let error = false;
-            if (fog.querySelector('#origin').value.length){
+            if (tabsContent.create.querySelector('#origin').value.length){
                 // make sure origin informed is only then domain name
-                const value = fog.querySelector('#origin').value.trim().toLowerCase();
+                const value = tabsContent.create.querySelector('#origin').value.trim().toLowerCase();
                 const match = value.match(urlRegex);
                 if (match && match.length > 1){
                     body.origin = value;
                 }
                 else{
-                    const tip = fog.querySelector('#origin-tip');
+                    const tip = tabsContent.create.querySelector('#origin-tip');
                     tip.innerHTML = 'Invalid domain';
                     tip.classList.add('red');
-                    fog.querySelector('#origin').classList.add('red');
+                    tabsContent.create.querySelector('#origin').classList.add('red');
                     error = true;
                 }
             }
-            if (fog.querySelector('#note').value.length){
-                body.note = fog.querySelector('#note').value.trim();
+            if (tabsContent.create.querySelector('#note').value.length){
+                body.note = tabsContent.create.querySelector('#note').value.trim();
             }
 
             if (!error){
@@ -692,11 +713,245 @@ const api = {
             }
         })
 
-        const titleInfo = [
-            'Informing an origin restrict the use of your API key to only the designated domain. It is highly recommended for preventing unauthorized calls using your key.',
-            'You could set a note to your key for informative purposes.',
-        ];
-        fog.querySelectorAll('.title i').forEach((e,i) => new Tooltip(e, titleInfo[i]));
+
+        // edit api key modal
+        tabsContent.edit.innerHTML = `<h2>Edit API key</h2>
+        <p class="title">API Key</p>
+        <input type="text" class="input-text" id="key" placeholder="00000000000000000000000000000000">
+        <span id="key-tip" class="tip"></span>
+        <p class="title">API Secret</p>
+        <input type="text" class="input-text" id="secret" placeholder="00000000000000000000000000000000">
+        <span id="secret-tip" class="tip"></span>
+        <p class="title origin">Origin <i class="far fa-question-circle"></i></p>
+        <input type="text" class="input-text" id="origin" placeholder="mywebsite.com">
+        <span id="origin-tip" class="tip"></span>
+        <p class="title note">Note <i class="far fa-question-circle"></i></p>
+        <input type="text" class="input-text" id="note" placeholder="My personal note for this key">
+        <div id="checkbox-container">
+            <label>
+                <input type="checkbox">
+                <span>
+                    <div>I want to reset my API key hash</div>
+                    <div>BEWARE: The current API key hash will not be usable anymore.</div>
+                </span>
+            </label>
+        </div>
+        <div id="button-container"><button id="edit-key">Save</button></div>`;
+
+        tabsContent.edit.querySelector('#origin').addEventListener('keyup', function() {
+            const value = this.value.trim().toLowerCase();
+            const match = value.match(urlRegex);
+            if (match && match.length > 1){
+                const tip = tabsContent.edit.querySelector('#origin-tip');
+                tip.classList.remove('red');
+                tip.innerHTML = '';
+                tabsContent.edit.querySelector('#origin').classList.remove('red');
+            }
+        });
+
+        tabsContent.edit.querySelectorAll('#key, #secret').forEach(e => e.addEventListener('keyup', function() {
+            const value = this.value.trim().toLowerCase();
+            if (value.match(/^[a-f0-9]{32}$/)){
+                const tip = tabsContent.edit.querySelector(`#${this.id}-tip`);
+                tip.classList.remove('red');
+                tip.innerHTML = '';
+                this.classList.remove('red');
+            }
+        }));
+
+        tabsContent.edit.querySelector('#edit-key').addEventListener('click', function() {
+            const body = {};
+            let error = false;
+            if (tabsContent.edit.querySelector('#origin').value.length){
+                // make sure origin informed is only then domain name
+                const value = tabsContent.edit.querySelector('#origin').value.trim().toLowerCase();
+                const match = value.match(urlRegex);
+                if (match && match.length > 1){
+                    body.origin = value;
+                }
+                else{
+                    const tip = tabsContent.edit.querySelector('#origin-tip');
+                    tip.innerHTML = 'Invalid domain';
+                    tip.classList.add('red');
+                    tabsContent.edit.querySelector('#origin').classList.add('red');
+                    error = true;
+                }
+            }
+            if (tabsContent.edit.querySelector('#note').value.length){
+                body.note = tabsContent.edit.querySelector('#note').value.trim();
+            }
+
+            const key = tabsContent.edit.querySelector('#key').value.trim().toLowerCase();
+            if (!key.match(/^[a-f0-9]{32}$/)){
+                const tip = tabsContent.edit.querySelector('#key-tip');
+                tip.innerHTML = 'Invalid API key';
+                tip.classList.add('red');
+                tabsContent.edit.querySelector('#key').classList.add('red');
+                error = true;
+            }
+
+            body.secret = tabsContent.edit.querySelector('#secret').value.trim().toLowerCase();
+            if (!body.secret.match(/^[a-f0-9]{32}$/)){
+                const tip = tabsContent.edit.querySelector('#secret-tip');
+                tip.innerHTML = 'Invalid API secret';
+                tip.classList.add('red');
+                tabsContent.edit.querySelector('#secret').classList.add('red');
+                error = true;
+            }
+
+            const reset = tabsContent.edit.querySelector('#checkbox-container input').checked;
+            if (reset){
+                body.resetKey = true;
+            }
+
+
+            if (!error){
+                this.setAttribute('disabled', true);
+                this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
+    
+                api.editKey(key, body);
+            }
+        });
+
+
+        // get api key information
+        tabsContent.info.innerHTML = `<h2>API key information</h2>
+        <p class="title">API key</p>
+        <input type="text" class="input-text" id="key" placeholder="00000000000000000000000000000000">
+        <span id="key-tip" class="tip"></span>
+        <div id="button-container"><button id="get-key">Search</button></div>`;
+
+        tabsContent.info.querySelector('#key').addEventListener('keyup', function() {
+            const value = this.value.trim().toLowerCase();
+            if (value.match(/^[a-f0-9]{32}$/)){
+                const tip = tabsContent.info.querySelector(`#key-tip`);
+                tip.classList.remove('red');
+                tip.innerHTML = '';
+                this.classList.remove('red');
+            }
+        });
+
+        tabsContent.info.querySelector('#get-key').addEventListener('click', function() {
+            let error = false;
+
+            const key = tabsContent.info.querySelector('#key').value.trim().toLowerCase();
+            if (!key.match(/^[a-f0-9]{32}$/)){
+                const tip = tabsContent.info.querySelector('#key-tip');
+                tip.innerHTML = 'Invalid API key';
+                tip.classList.add('red');
+                tabsContent.info.querySelector('#key').classList.add('red');
+                error = true;
+            }
+
+            if (!error){
+                this.setAttribute('disabled', true);
+                this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
+    
+                api.getKey(key);
+            }
+        });
+
+
+        const titleInfo = {
+            origin: 'Informing an origin restrict the use of your API key to only the designated domain. It is highly recommended for preventing unauthorized calls using your key.',
+            note: 'You could set a note to your key for informative purposes.',
+        };
+
+        Object.keys(tabsContent).forEach(tab => tabsContent[tab].querySelectorAll('.title i').forEach(e => {
+            const inputClass = Array.from(e.parentNode.classList).filter(e => Object.keys(titleInfo).includes(e));
+            new Tooltip(e, titleInfo[inputClass]);
+        }));
+
+        fog.querySelector('#tab-container #info').click();
+    },
+
+    getKey: async function(key) {
+        const data = await (await fetch(`/keys/${key}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+        })).json();
+
+        const modal = document.querySelector('#fog #api-window');
+        if (data.apiKey){
+            const fields = Object.entries(data).filter(e => e[0] != 'usage').map(e => {
+                const label = e[0] == 'apiKey' ? 'API Key' : e[0];
+
+                let value = e[1];
+                if (e[0] == 'credit') {
+                    value = `${(e[1] / 100000000).toFixed(8)} BNB`;
+                }
+                else if (e[0] == 'creation'){
+                    value = new Date(e[1]).toLocaleString();
+                }
+
+                let input = `<input type="text" class="input-text keys" value="${value}" readonly>`;
+                if (e[0] == 'wallet'){
+                    input = `<div class="copy-container">${input}<div class="copy"><i class="far fa-copy"></i></div></div>`;
+                }
+                return `<p class="title">${label}</p>${input}`;
+            }).join('');
+
+            modal.innerHTML = `<div id="content">
+                <h2>API key information</h2>
+                ${fields}
+                <div id="button-container">
+                    <button id="credit">Credit info</button>
+                    <button id="close">Close</button>
+                </div>
+            </div>`;
+
+            modal.querySelector('.copy').addEventListener('click', function(){
+                const parent = this.closest('.copy-container');
+                api.copyText(parent);
+            });
+
+            // TODO: make a credit update every 5 secs here
+        }
+        else{
+            modal.innerHTML = `<div id="content">
+                <h2>${data.error || 'Message'}</h2>
+                <p>${data.message}</p>
+                <div id="button-container"><button id="close">OK</button></div>
+            </div>`;
+        }
+
+        modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
+        modal.querySelector('#credit').addEventListener('click', () => this.getCredit(key));
+    },
+
+    // TODO
+    getCredit: async function(key) {
+        console.log(key, 'get credit')
+    },
+
+    editKey: async function(key, body) {
+        const data = await (await fetch(`/keys/${key}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })).json();
+
+        const modal = document.querySelector('#fog #api-window');
+        if (data.apiKey){
+            const fields = Object.entries(data).filter(e => e[0] != 'apiKey' && e[0] != 'message').map(e => `<p class="title">${e[0]}</p><input type="text" class="input-text keys" value="${e[1]}" readonly>`).join('');
+
+            modal.innerHTML = `<div id="content">
+                <h2>API key information updated</h2>
+                <p class="title">API Key</p>
+                <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
+                ${fields}
+                <div id="button-container"><button id="close">OK</button></div>
+            </div>`;
+        }
+        else{
+            modal.innerHTML = `<div id="content">
+                <h2>${data.error || 'Message'}</h2>
+                <p>${data.message}</p>
+                <div id="button-container"><button id="close">OK</button></div>
+            </div>`;
+        }
+
+        modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
     },
 
     createKey: async function(body) {
@@ -707,8 +962,9 @@ const api = {
         })).json();
 
         if (data.apiKey){
-            const modal = document.querySelector('#fog #new-api-window');
-            modal.innerHTML = `<h2>API key Created</h2>
+            const modal = document.querySelector('#fog #api-window');
+            modal.innerHTML = `<div id="content">
+                <h2>API key Created</h2>
                 <p class="title">API Key</p>
                 <div class="copy-container">
                     <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
@@ -729,7 +985,7 @@ const api = {
                     <li>We do not store your key and secret in plain text, so we cannot recover them in case of loss.</li>
                 </ul>
                 <div id="button-container"><button id="close">OK</button></div>
-            `;
+            </div>`;
             // add buttons for clipboard copy info
 
             modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
@@ -754,4 +1010,4 @@ const api = {
         navigator.clipboard.writeText(oldText);
     }
 };
-document.querySelector('#new-apikey').addEventListener('click', () => api.showModal());
+document.querySelector('#manage-apikey').addEventListener('click', () => api.showModal());
