@@ -314,24 +314,61 @@ price.update();
 setInterval(() => price.update(), 10000); // update every 10s
 
 
-// open a bscscan search window
+// search api key button
 
-document.querySelector('#search button').addEventListener('click', bscScanSearch);
+document.querySelector('#search #api-info').addEventListener('click', async () => {
+    const input = document.querySelector('#search input');
+    const key = input.value.trim().toLowerCase();
+    if (key.match(api.regex.apiKey)){
+        const data = await api.getKey(key);
+        api.showModal();
+        api.showWindowInfo(data);
+    }
+    input.value = '';
+});
+
 document.querySelector('#search input').addEventListener('keyup', e => {
     if (e.key == 'Enter'){
-        bscScanSearch();
+        document.querySelector('#search #api-info').click();
     }
 });
 
-function bscScanSearch() {
-    const input = document.querySelector('#search input');
-    const url = `https://bscscan.com/search?q=`;
+document.querySelector('#search #drop').addEventListener('click', async function() {
+    const dropdown = document.createElement('div');
+    dropdown.id = 'dropdown';
 
-    if (input.value.length > 0){
-        window.open(`${url}${input.value}`);
-    }
-    input.value = '';
-}
+    dropdown.innerHTML = `
+        <div id="create-key" class="item">Create API key</div>
+        <div id="edit-key" class="item">Edit API key</div>
+        <div id="info-key" class="item">API key info</div>
+    `;
+
+    dropdown.style.top = `${this.offsetTop + this.clientHeight}px`;
+    dropdown.style.left = `${this.offsetLeft + this.clientWidth - 130}px`;
+
+    dropdown.querySelectorAll('.item').forEach(e => e.addEventListener('click', () => api.showModal(e.id.split('-')[0])));
+    
+    const fog = document.createElement('div');
+    fog.id = 'fog';
+    fog.classList.add('invisible');
+
+
+    document.body.appendChild(fog);
+    fog.appendChild(dropdown);
+
+    fog.addEventListener('click', () => fog.remove());
+});
+
+
+// function bscScanSearch() {
+//     const input = document.querySelector('#search input');
+//     const url = `https://bscscan.com/search?q=`;
+
+//     if (input.value.length > 0){
+//         window.open(`${url}${input.value}`);
+//     }
+//     input.value = '';
+// }
 
 
 // create modal about donation
@@ -1011,7 +1048,7 @@ const api = {
         modal.querySelector('#close').addEventListener('click', () => document.querySelector('#fog').remove());
     },
 
-    showModal: function(){
+    showModal: function(tabSelected){
         const fog = document.createElement('div');
         fog.id = 'fog';
         fog.innerHTML = `<div id='api-window'>
@@ -1065,7 +1102,7 @@ const api = {
             new Tooltip(e, titleInfo[inputClass]);
         }));
 
-        fog.querySelector('#tab-container #info').click();
+        fog.querySelector(`#tab-container #${tabSelected || 'info'}`).click();
     },
 
     createKey: async function(body) {
