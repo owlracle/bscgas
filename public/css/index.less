@@ -1,3 +1,4 @@
+@size-400:   ~"only screen and (min-width: 400px)";
 @size-600:   ~"only screen and (min-width: 600px)";
 @size-900:   ~"only screen and (min-width: 900px)";
 @size-1200:   ~"only screen and (min-width: 1200px)";
@@ -594,10 +595,33 @@ body {
                 display: flex;
                 align-items: center;
                 cursor: pointer;
-                margin-right: 10px;
+                margin-right: 15px;
 
                 &:hover {
                     opacity: 0.8;
+                }
+            }
+
+            #keys {
+                display: flex;
+                align-items: center;
+                cursor: pointer;
+                font-size: 1.2rem;
+                border: 1px solid #db343459;
+                border-radius: 3px;
+                padding: 3px 5px;
+                height: 35px;
+                box-sizing: border-box;
+                background-color: #db34343d;
+                transition: 0.3s all;
+
+                &:hover {
+                    background-color: #db3434;
+                }
+
+                span {
+                    font-size: 0.95rem;
+                    margin-left: 10px;
                 }
             }
 
@@ -753,13 +777,60 @@ body {
             background-color: var(--bg-color);
             color: var(--text-color);
             border-radius: 3px;
-            width: 100%;
-            max-width: 400px;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
             border-color: var(--border-color);
             box-shadow: 2px 2px 5px black;
+            width: 100%;
+            max-width: 400px;
+            max-height: 100vh;
+
+            &.large {
+                max-width: 600px;
+
+                .table {
+                    display: flex;
+                    flex-direction: column;
+
+                    .body {
+                        overflow-y: auto;
+                        max-height: 300px;
+
+                        @media @size-600 {
+                            max-height: calc(50vh - 60px);
+                        }
+                    }
+
+                    .row {
+                        display: flex;
+                        justify-content: space-between;
+                        border-bottom: 1px solid var(--border-color);
+                        transition: 0.3s all;
+                        cursor: default;
+                        flex-wrap: wrap;
+
+                        &:hover {
+                            background-color: var(--border-color);
+                        }
+
+                        &.head {
+                            font-weight: bold;
+
+                            background-color: transparent;
+                        }
+
+                        .cell {
+                            padding: 5px 15px;
+                            display: flex;
+                            align-items: center;
+                            width: 25%;
+                            min-width: 130px;
+                            box-sizing: border-box;
+                        }
+                    }
+                }
+            }
             
             #tab-container {
                 display: flex;
@@ -782,7 +853,25 @@ body {
                     }
 
                     i {
-                        margin-right: 10px;
+                        @media @size-400 {
+                            margin-right: 10px;
+                        }
+                    }
+
+                    .text {
+                        display: none;
+
+                        @media @size-400 {
+                            display: block;
+                        }
+                    }
+                }
+
+                #close-tab {
+                    background-color: #ff00002b;
+
+                    @media @size-400 {
+                        display: none;
                     }
                 }
             }
@@ -790,11 +879,44 @@ body {
             #content {
                 display: flex;
                 flex-direction: column;
-                padding: 20px 30px;
+                padding: 5px 5px 20px 5px;
+                overflow-y: auto;
+                max-height: 100vh;
+                width: 100%;
+                box-sizing: border-box;
+                
+                @media @size-400 {
+                    padding: 20px 30px;
+                }
 
                 h2 {
                     margin: 10px 0 20px 0;
                 }
+                
+                #key-show {
+                    margin: -10px 0 35px 10px;
+                    opacity: 0.8;
+                    font-size: 0.9rem;
+                }
+
+                #missing {
+                    margin-left: 20px;
+                    font-size: 0.9rem;
+                    
+                    a {
+                        text-decoration: none;
+                        color: #2689cc;
+                        cursor: pointer;
+                    }
+                }
+
+                .table .empty {
+                    font-weight: bold;
+                    margin-bottom: 20px;
+                    border: 1px solid var(--border-color);
+                    padding: 10px 20px;
+                    border-radius: 3px;
+                }    
     
                 .input-text {
                     padding: 10px 15px;
@@ -855,13 +977,8 @@ body {
                     display: flex;
                     align-items: center;
                     margin: -10px 0 5px 15px;
-                    opacity: 0.7;
                     transition: 0.3s all;
-    
-                    &.red {
-                        color: red;
-                        opacity: 1;
-                    }
+                    color: red;
                 }
     
                 .title {
@@ -882,7 +999,7 @@ body {
                     label {
                         display: flex;
                         align-items: center;
-                        margin-bottom: 10px;
+                        margin-bottom: 20px;
                         transition: 0.2s all;
                         cursor: pointer;
     
@@ -898,8 +1015,16 @@ body {
                         span {
                             margin-left: 10px;
 
-                            div {
-                                margin-bottom: 5px;
+                            .tip {
+                                transition: 0.5s all;
+                                height: 35px;
+                                opacity: 1;
+                                margin: 5px 0 -40px 0;
+                                text-shadow: none;
+                                
+                                &.hidden {
+                                    opacity: 0;
+                                }
                             }
                         }
                     }
@@ -958,6 +1083,7 @@ body {
         font-weight: normal;
         cursor: help;
         max-width: 300px;
+        text-transform: none;
     }
 
     #countdown-container {

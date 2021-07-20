@@ -610,40 +610,14 @@ import('https://cpwebassets.codepen.io/assets/embed/ei.js');
 // }
 
 const api = {
-    showModal: function(){
-        const fog = document.createElement('div');
-        fog.id = 'fog';
-        fog.innerHTML = `<div id='api-window'>
-            <div id='tab-container'>
-                <div class="tab" id="info"><i class="fas fa-eye"></i>Key Info</div>
-                <div class="tab" id="edit"><i class="fas fa-edit"></i>Edit Key</div>
-                <div class="tab" id="create"><i class="fas fa-plus"></i>Create Key</div>
-            </div>
-            <div id='content'></div>
-        </div>`;
+    regex: {
+        url: new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/),
+        apiKey: new RegExp(/^[a-f0-9]{32}$/),
+    },
 
-        const tabsContent = Object.fromEntries(['info', 'edit', 'create'].map(e => [e, (() => {
-            const elem = document.createElement('div');
-            elem.id = 'content';
-            return elem;
-        })()]));
-
-        fog.querySelectorAll('.tab').forEach(e => e.addEventListener('click', () => {
-            if (!e.classList.contains('active')){
-                fog.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
-                e.classList.add('active');
-            }
-            const content = fog.querySelector(`#content`);
-            content.replaceWith(tabsContent[e.id]);
-        }));
-
-        fog.addEventListener('click', () => fog.remove());
-        fog.querySelector('div').addEventListener('click', e => e.stopPropagation());
-
-        document.body.appendChild(fog);
-        fadeIn(fog, 500);
-
+    createNewApiContent: function(){
         // create api key modal
+        const tabsContent = this.tabsContent;
         tabsContent.create.innerHTML = `<h2>New API key</h2>
         <p class="title origin">Origin <i class="far fa-question-circle"></i></p>
         <input type="text" class="input-text" id="origin" placeholder="mywebsite.com">
@@ -671,19 +645,19 @@ const api = {
             }
         }));
 
-        const urlRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
+
+        const urlRegex = this.regex.url;
         tabsContent.create.querySelector('#origin').addEventListener('keyup', () => {
             const value = tabsContent.create.querySelector('#origin').value.trim().toLowerCase();
             const match = value.match(urlRegex);
             if (match && match.length > 1){
                 const tip = tabsContent.create.querySelector('#origin-tip');
-                tip.classList.remove('red');
                 tip.innerHTML = '';
                 tabsContent.create.querySelector('#origin').classList.remove('red');
             }
-        })
+        });
 
-        tabsContent.create.querySelector('#create-key').addEventListener('click', function() {
+        tabsContent.create.querySelector('#create-key').addEventListener('click', async function() {
             const body = {};
             let error = false;
             if (tabsContent.create.querySelector('#origin').value.length){
@@ -696,7 +670,6 @@ const api = {
                 else{
                     const tip = tabsContent.create.querySelector('#origin-tip');
                     tip.innerHTML = 'Invalid domain';
-                    tip.classList.add('red');
                     tabsContent.create.querySelector('#origin').classList.add('red');
                     error = true;
                 }
@@ -709,12 +682,15 @@ const api = {
                 this.setAttribute('disabled', true);
                 this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
     
-                api.createKey(body);
+                const data = await api.createKey(body);
+                api.showWindowCreate(data);
             }
-        })
+        });
+    },
 
-
+    createEditApiContent: function(){
         // edit api key modal
+        const tabsContent = this.tabsContent;
         tabsContent.edit.innerHTML = `<h2>Edit API key</h2>
         <p class="title">API Key</p>
         <input type="text" class="input-text" id="key" placeholder="00000000000000000000000000000000">
@@ -732,18 +708,20 @@ const api = {
                 <input type="checkbox">
                 <span>
                     <div>I want to reset my API key hash</div>
-                    <div>BEWARE: The current API key hash will not be usable anymore.</div>
+                    <div class='tip hidden'>WARNING: The current API key hash will not be usable anymore.</div>
                 </span>
             </label>
         </div>
         <div id="button-container"><button id="edit-key">Save</button></div>`;
+
+        const urlRegex = this.regex.url;
+        const apiKeyRegex = this.regex.apiKey;
 
         tabsContent.edit.querySelector('#origin').addEventListener('keyup', function() {
             const value = this.value.trim().toLowerCase();
             const match = value.match(urlRegex);
             if (match && match.length > 1){
                 const tip = tabsContent.edit.querySelector('#origin-tip');
-                tip.classList.remove('red');
                 tip.innerHTML = '';
                 tabsContent.edit.querySelector('#origin').classList.remove('red');
             }
@@ -751,15 +729,24 @@ const api = {
 
         tabsContent.edit.querySelectorAll('#key, #secret').forEach(e => e.addEventListener('keyup', function() {
             const value = this.value.trim().toLowerCase();
-            if (value.match(/^[a-f0-9]{32}$/)){
+            if (value.match(apiKeyRegex)){
                 const tip = tabsContent.edit.querySelector(`#${this.id}-tip`);
-                tip.classList.remove('red');
                 tip.innerHTML = '';
                 this.classList.remove('red');
             }
         }));
 
-        tabsContent.edit.querySelector('#edit-key').addEventListener('click', function() {
+        tabsContent.edit.querySelector('#checkbox-container input').addEventListener('change', function() {
+            const tip = this.parentNode.querySelector('.tip');
+            if (this.checked){
+                tip.classList.remove('hidden');
+            }
+            else{
+                tip.classList.add('hidden');
+            }
+        });
+
+        tabsContent.edit.querySelector('#edit-key').addEventListener('click', async function() {
             const body = {};
             let error = false;
             if (tabsContent.edit.querySelector('#origin').value.length){
@@ -772,7 +759,6 @@ const api = {
                 else{
                     const tip = tabsContent.edit.querySelector('#origin-tip');
                     tip.innerHTML = 'Invalid domain';
-                    tip.classList.add('red');
                     tabsContent.edit.querySelector('#origin').classList.add('red');
                     error = true;
                 }
@@ -782,19 +768,17 @@ const api = {
             }
 
             const key = tabsContent.edit.querySelector('#key').value.trim().toLowerCase();
-            if (!key.match(/^[a-f0-9]{32}$/)){
+            if (!key.match(apiKeyRegex)){
                 const tip = tabsContent.edit.querySelector('#key-tip');
                 tip.innerHTML = 'Invalid API key';
-                tip.classList.add('red');
                 tabsContent.edit.querySelector('#key').classList.add('red');
                 error = true;
             }
 
             body.secret = tabsContent.edit.querySelector('#secret').value.trim().toLowerCase();
-            if (!body.secret.match(/^[a-f0-9]{32}$/)){
+            if (!body.secret.match(apiKeyRegex)){
                 const tip = tabsContent.edit.querySelector('#secret-tip');
                 tip.innerHTML = 'Invalid API secret';
-                tip.classList.add('red');
                 tabsContent.edit.querySelector('#secret').classList.add('red');
                 error = true;
             }
@@ -809,12 +793,15 @@ const api = {
                 this.setAttribute('disabled', true);
                 this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
     
-                api.editKey(key, body);
+                const data = await api.editKey(key, body);
+                api.showWindowEdit(data);
             }
         });
+    },
 
-
+    createInfoApiContent: function(){
         // get api key information
+        const tabsContent = this.tabsContent;
         tabsContent.info.innerHTML = `<h2>API key information</h2>
         <p class="title">API key</p>
         <input type="text" class="input-text" id="key" placeholder="00000000000000000000000000000000">
@@ -823,22 +810,22 @@ const api = {
 
         tabsContent.info.querySelector('#key').addEventListener('keyup', function() {
             const value = this.value.trim().toLowerCase();
-            if (value.match(/^[a-f0-9]{32}$/)){
+            if (value.match(apiKeyRegex)){
                 const tip = tabsContent.info.querySelector(`#key-tip`);
-                tip.classList.remove('red');
                 tip.innerHTML = '';
                 this.classList.remove('red');
             }
         });
 
-        tabsContent.info.querySelector('#get-key').addEventListener('click', function() {
+        const apiKeyRegex = this.regex.apiKey;
+
+        tabsContent.info.querySelector('#get-key').addEventListener('click', async function() {
             let error = false;
 
             const key = tabsContent.info.querySelector('#key').value.trim().toLowerCase();
-            if (!key.match(/^[a-f0-9]{32}$/)){
+            if (!key.match(apiKeyRegex)){
                 const tip = tabsContent.info.querySelector('#key-tip');
                 tip.innerHTML = 'Invalid API key';
-                tip.classList.add('red');
                 tabsContent.info.querySelector('#key').classList.add('red');
                 error = true;
             }
@@ -846,123 +833,16 @@ const api = {
             if (!error){
                 this.setAttribute('disabled', true);
                 this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
-    
-                api.getKey(key);
+
+                const data = await api.getKey(key);
+                api.showWindowInfo(data);
             }
         });
-
-
-        const titleInfo = {
-            origin: 'Informing an origin restrict the use of your API key to only the designated domain. It is highly recommended for preventing unauthorized calls using your key.',
-            note: 'You could set a note to your key for informative purposes.',
-        };
-
-        Object.keys(tabsContent).forEach(tab => tabsContent[tab].querySelectorAll('.title i').forEach(e => {
-            const inputClass = Array.from(e.parentNode.classList).filter(e => Object.keys(titleInfo).includes(e));
-            new Tooltip(e, titleInfo[inputClass]);
-        }));
-
-        fog.querySelector('#tab-container #info').click();
     },
 
-    getKey: async function(key) {
-        const data = await (await fetch(`/keys/${key}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-        })).json();
-
+    showWindowCreate: function(data){
         const modal = document.querySelector('#fog #api-window');
         if (data.apiKey){
-            const fields = Object.entries(data).filter(e => e[0] != 'usage').map(e => {
-                const label = e[0] == 'apiKey' ? 'API Key' : e[0];
-
-                let value = e[1];
-                if (e[0] == 'credit') {
-                    value = `${(e[1] / 100000000).toFixed(8)} BNB`;
-                }
-                else if (e[0] == 'creation'){
-                    value = new Date(e[1]).toLocaleString();
-                }
-
-                let input = `<input type="text" class="input-text keys" value="${value}" readonly>`;
-                if (e[0] == 'wallet'){
-                    input = `<div class="copy-container">${input}<div class="copy"><i class="far fa-copy"></i></div></div>`;
-                }
-                return `<p class="title">${label}</p>${input}`;
-            }).join('');
-
-            modal.innerHTML = `<div id="content">
-                <h2>API key information</h2>
-                ${fields}
-                <div id="button-container">
-                    <button id="credit">Credit info</button>
-                    <button id="close">Close</button>
-                </div>
-            </div>`;
-
-            modal.querySelector('.copy').addEventListener('click', function(){
-                const parent = this.closest('.copy-container');
-                api.copyText(parent);
-            });
-
-            // TODO: make a credit update every 5 secs here
-        }
-        else{
-            modal.innerHTML = `<div id="content">
-                <h2>${data.error || 'Message'}</h2>
-                <p>${data.message}</p>
-                <div id="button-container"><button id="close">OK</button></div>
-            </div>`;
-        }
-
-        modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
-        modal.querySelector('#credit').addEventListener('click', () => this.getCredit(key));
-    },
-
-    // TODO
-    getCredit: async function(key) {
-        console.log(key, 'get credit')
-    },
-
-    editKey: async function(key, body) {
-        const data = await (await fetch(`/keys/${key}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        })).json();
-
-        const modal = document.querySelector('#fog #api-window');
-        if (data.apiKey){
-            const fields = Object.entries(data).filter(e => e[0] != 'apiKey' && e[0] != 'message').map(e => `<p class="title">${e[0]}</p><input type="text" class="input-text keys" value="${e[1]}" readonly>`).join('');
-
-            modal.innerHTML = `<div id="content">
-                <h2>API key information updated</h2>
-                <p class="title">API Key</p>
-                <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
-                ${fields}
-                <div id="button-container"><button id="close">OK</button></div>
-            </div>`;
-        }
-        else{
-            modal.innerHTML = `<div id="content">
-                <h2>${data.error || 'Message'}</h2>
-                <p>${data.message}</p>
-                <div id="button-container"><button id="close">OK</button></div>
-            </div>`;
-        }
-
-        modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
-    },
-
-    createKey: async function(body) {
-        const data = await (await fetch('/keys', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        })).json();
-
-        if (data.apiKey){
-            const modal = document.querySelector('#fog #api-window');
             modal.innerHTML = `<div id="content">
                 <h2>API key Created</h2>
                 <p class="title">API Key</p>
@@ -996,8 +876,233 @@ const api = {
             }));
         }
         else{
-            console.log(data);
+            modal.innerHTML = `<div id="content">
+                <h2>${data.error || 'Message'}</h2>
+                <p>${data.message}</p>
+                <div id="button-container"><button id="close">OK</button></div>
+            </div>`;
         }
+    },
+
+    showWindowEdit: function(data){
+        const modal = document.querySelector('#fog #api-window');
+        if (data.apiKey){
+            const fields = Object.entries(data).filter(e => e[0] != 'apiKey' && e[0] != 'message').map(e => `<p class="title">${e[0]}</p><input type="text" class="input-text keys" value="${e[1]}" readonly>`).join('');
+
+            modal.innerHTML = `<div id="content">
+                <h2>API key information updated</h2>
+                <p class="title">API Key</p>
+                <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
+                ${fields}
+                <div id="button-container"><button id="close">OK</button></div>
+            </div>`;
+        }
+        else{
+            modal.innerHTML = `<div id="content">
+                <h2>${data.error || 'Message'}</h2>
+                <p>${data.message}</p>
+                <div id="button-container"><button id="close">OK</button></div>
+            </div>`;
+        }
+
+        modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
+    },
+
+    showWindowInfo: function(data) {
+        const modal = document.querySelector('#fog #api-window');
+        if (data.apiKey){
+            const key = data.apiKey;
+            const fields = Object.entries(data).filter(e => e[0] != 'usage').map(e => {
+                const label = e[0] == 'apiKey' ? 'API Key' : e[0];
+
+                let value = e[1];
+                if (e[0] == 'credit') {
+                    value = `...`;
+                }
+                else if (e[0] == 'creation'){
+                    value = new Date(e[1]).toISOString().replace('T', ' ').split('.')[0];
+                }
+
+                let input = `<input type="text" class="input-text keys" id="input-${label}" value="${value}" readonly>`;
+                if (e[0] == 'wallet'){
+                    input = `<div class="copy-container">${input}<div class="copy"><i class="far fa-copy"></i></div></div>`;
+                }
+                return `<p class="title">${label}</p>${input}`;
+            }).join('');
+
+            modal.innerHTML = `<div id="content">
+                <h2>API key information</h2>
+                ${fields}
+                <div id="button-container">
+                    <button id="credit">History</button>
+                    <button id="close">Close</button>
+                </div>
+            </div>`;
+
+            modal.querySelector('.copy').addEventListener('click', function(){
+                const parent = this.closest('.copy-container');
+                api.copyText(parent);
+            });
+
+            modal.querySelector('#credit').addEventListener('click', async () => {
+                const data = await this.getCredit(key);
+                this.showWindowCredit(key, data);
+            });    
+
+            async function refreshCredit(key){
+                const modal = document.querySelector('#fog #api-window');
+                if (modal && modal.querySelector('#input-credit')){
+                    await api.updateCredit(key);
+                    const data = await api.getKey(key);
+
+                    // if even after await you are still on the same window
+                    if (modal && modal.querySelector('#input-credit')){
+                        modal.querySelector('#input-credit').value = `${(data.credit / 100000000).toFixed(8)} BNB`;
+                        setTimeout(() => refreshCredit(key), 5000);
+                    }
+                }
+            }
+            refreshCredit(key);
+        }
+        else{
+            modal.innerHTML = `<div id="content">
+                <h2>${data.error || 'Message'}</h2>
+                <p>${data.message}</p>
+                <div id="button-container"><button id="close">OK</button></div>
+            </div>`;
+        }
+
+        modal.querySelector('#close').addEventListener('click', () => document.querySelector('#fog').remove());
+    },
+
+    showWindowCredit: function(key, data) {
+        const modal = document.querySelector('#fog #api-window');
+
+        let txs = '<div class="empty">No transactions found. Try sending some BNB to your API wallet.</div>';
+        if (data.results.length > 0){
+            modal.classList.add('large');
+
+            const tds = data.results.map(e => {
+                return `<div class="row">
+                    <div class="cell"><a href="https://bscscan.com/tx/${e.tx}" target="_blank">${e.tx.slice(0,6)}...${e.tx.slice(-4)}</a></div>
+                    <div class="cell">${new Date(e.timestamp).toISOString().replace('T', ' ').split('.')[0]}</div>
+                    <div class="cell"><a href="https://bscscan.com/address/${e.fromWallet}" target="_blank">${e.fromWallet.slice(0,6)}...${e.fromWallet.slice(-4)}</a></div>
+                    <div class="cell">${(e.value / 100000000).toFixed(8)}</div>
+                </div>`;
+            }).join('');
+            txs = `<div class="row head">
+                <div class="cell">Tx</div>
+                <div class="cell">Time</div>
+                <div class="cell">From wallet</div>
+                <div class="cell">Value (BNB)</div>
+            </div>
+            <div class="body">${tds}</div>`;
+        }
+        txs = `<div class="table">${txs}</div>`;
+        
+        modal.innerHTML = `<div id="content">
+            <h2>API recharge history</h2>
+            <p id="key-show">${key}</p>
+            ${txs}
+            <p id="missing">Missing tx? <a href="https://t.me/bscgas_info" target="_blank">contact us</a>!</p>
+            <div id="button-container"><button id="close">Close</button></div>
+        </div>`;
+        
+        modal.querySelector('#close').addEventListener('click', () => document.querySelector('#fog').remove());
+    },
+
+    showModal: function(){
+        const fog = document.createElement('div');
+        fog.id = 'fog';
+        fog.innerHTML = `<div id='api-window'>
+            <div id='tab-container'>
+                <div class="tab" id="info"><i class="fas fa-eye"></i><span class="text">Key Info</span></div>
+                <div class="tab" id="edit"><i class="fas fa-edit"></i><span class="text">Edit Key</span></div>
+                <div class="tab" id="create"><i class="fas fa-plus"></i><span class="text">Create Key</span></div>
+                <div class="tab" id="close-tab"><i class="fas fa-times"></i></div>
+            </div>
+            <div id='content'></div>
+        </div>`;
+
+        const tabsContent = Object.fromEntries(['info', 'edit', 'create'].map(e => [e, (() => {
+            const elem = document.createElement('div');
+            elem.id = 'content';
+            return elem;
+        })()]));
+        this.tabsContent = tabsContent;
+
+        fog.querySelectorAll('.tab').forEach(e => e.addEventListener('click', () => {
+            if (e.id == 'close-tab'){
+                fog.click();
+            }
+            else{
+                if (!e.classList.contains('active')){
+                    fog.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+                    e.classList.add('active');
+                }
+                const content = fog.querySelector(`#content`);
+                content.replaceWith(tabsContent[e.id]);
+            }
+        }));
+
+        fog.addEventListener('click', () => fog.remove());
+        fog.querySelector('div').addEventListener('click', e => e.stopPropagation());
+
+        document.body.appendChild(fog);
+        fadeIn(fog, 500);
+
+        this.createNewApiContent();
+        this.createEditApiContent();
+        this.createInfoApiContent();
+
+        const titleInfo = {
+            origin: 'Informing an origin restrict the use of your API key to only the designated domain. It is highly recommended for preventing unauthorized calls using your key.',
+            note: 'You could set a note to your key for informative purposes.',
+        };
+
+        Object.keys(tabsContent).forEach(tab => tabsContent[tab].querySelectorAll('.title i').forEach(e => {
+            const inputClass = Array.from(e.parentNode.classList).filter(e => Object.keys(titleInfo).includes(e));
+            new Tooltip(e, titleInfo[inputClass]);
+        }));
+
+        fog.querySelector('#tab-container #info').click();
+    },
+
+    createKey: async function(body) {
+        return await (await fetch('/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })).json();
+    },
+
+    editKey: async function(key, body) {
+        return await (await fetch(`/keys/${key}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })).json();
+    },
+
+    getKey: async function(key) {
+        return await (await fetch(`/keys/${key}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+        })).json();
+    },
+
+    updateCredit: async function(key){
+        return await (await fetch(`/credit/${key}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+        })).json();
+    },
+
+    getCredit: async function(key) {
+        return await (await fetch(`/credit/${key}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+        })).json();
     },
 
     copyText: function(parent){
