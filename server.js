@@ -12,8 +12,8 @@ const app = express();
 let port = 4200;
 let saveDB = true;
 
-const USAGE_LIMIT = 1000000;
-const REQUEST_COST = 5;
+const USAGE_LIMIT = 100;
+const REQUEST_COST = 10;
 
 const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
 
@@ -39,6 +39,12 @@ const corsOptions = {
     optionsSuccessStatus: 200,
 };
 
+app.get('/limits', async (req, res) => {
+    res.send({
+        USAGE_LIMIT: USAGE_LIMIT,
+        REQUEST_COST: REQUEST_COST,
+    });
+});
 
 // generate new api key
 app.post('/keys', async (req, res) => {
@@ -684,7 +690,7 @@ if (saveDB && configFile.production){
 
 
 // request credit info
-app.get('/credit/:key', async (req, res) => {
+app.get('/credit/:key', cors(corsOptions), async (req, res) => {
     const key = req.params.key;
 
     if (!key.match(/^[a-f0-9]{32}$/)){

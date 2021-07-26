@@ -102,17 +102,17 @@
             </div>
         </div>
 
-        <h2>API endpoints</h2>
+        <h2>Software integration</h2>
 
-        <p>If you are a software developer, and want to integrate your application with our gas price oracle, you could generate an API key and start using our endpoints. For more information about API keys, <a href="#faq">read our FAQ</a>.</p>
-
-        <div id="apikey-container"><button id="manage-apikey"><i class="fas fa-key"></i>Manage API keys</button></div>
+        <p>If you are a software developer, and want to integrate your application with our gas price oracle, you can use our endpoints.</p>
 
         <h3 id="endpoint-gas">Gas price estimation</h3>
 
         <p>You could also retrieve the gas price estimations through our API endpoint:</p>
 
-        <pre class="code"><code><a href="/gas" target="_blank">https://bscgas.info/gas</a></code></pre>
+        <pre class="code"><code><a href="/gas" data-href="/gas?apikey={{}}" target="_blank">https://bscgas.info/gas?apikey=</a><input class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
+
+        <p>You dont't need to inform an <code class="code inline">apikey</code> if you are behind a public IP address and have low usage requirements, otherwise check the <a href="#api-keys-sec">API keys</a> section.</p>
 
         <p>The endpoint will answer with a <a href="https://en.wikipedia.org/wiki/JSON" target="_blank">JSON string</a> with the following format:</p>
 
@@ -143,15 +143,7 @@
 
         <p>A sample response (fetched on page load) is provided below:</p>
 
-        <pre class="code"><code id="sample"><i class="fas fa-spin fa-cog"></i></code></pre>
-
-        <p>In case the backend oracle is restarting (it does from time to time), the request return an error field as well as the timestamp:</p>
-
-        <pre class="code"><code>{
-    <span class="json key">"timestamp"</span>: <span class="json string">string</span>,
-    <span class="json key">"error"</span>: <span class="json string">"Oracle is restarting"</span>
-}</code></pre>
-        
+        <pre class="code"><code id="sample"><i class="fas fa-spin fa-cog"></i></code></pre>        
 
         <h3>Gas price history</h3>
 
@@ -223,6 +215,58 @@
         
         <p class="quote">If your API requests take a little while to get a response, please keep in mind that the oracle consumes a moderate amount of resources. It is running on my own low-spec server. Consider a <a class="donate-link">donation</a> to help bscgas to get better quality hardware.</p>
 
+
+        <h2 id="api-keys-sec">API keys</h2>
+
+        <p>When you access our endpoints, you need to be behind a public ip address or use an API key. In either case, you can request our data <code class="code inline request-limit"></code> times per hour for free. After reaching that limit, you can continue to make requests either waiting a few minutes or using your api credit.</p>
+
+        <h3>API keys console</h3>
+
+        <p>You can use the button below or the one <a href="#search">in the header</a> of this page to create, edit, and get information about your API keys.</p>
+
+        <div id="apikey-container"><button id="manage-apikey"><i class="fas fa-key"></i>Manage API keys</button></div>
+
+        <h3>API Credit</h3>
+
+        <p>After reaching the free request limit (<code class="code inline request-limit"></code> requests in the last hour), each new request will subtract <code class="code inline request-cost"></code> credits from your API account. Each credit is worth <code class="code inline">0.00000001 BNB</code> (around <code id="credit-bnb" class="code inline request-limit"></code> at current BNB price).</p>
+        
+        <p>Any time you want to recharge your API credits, you can make a BNB transfer of any amount to your API wallet. After the transfer, use our API console to make sure your credits are updated.</p>
+        
+        <p class="quote">To avoid unnecessary calls, and safety measures regarding your API keys, we strongly advise reading our <a href="#faq">FAQ</a></p>
+
+        <h3>API key information</h3>
+
+        <p>You can access information about your API key using the keys endpoint</p>
+
+        <pre class="code"><code><a href="/keys" data-href="/keys/{{}}" target="_blank">https://bscgas.info/keys/</a><input class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
+
+        <p>If the request went through, you will get a JSON response with the following fields:</p>
+
+        <ul>
+            <li><code class="code inline">apiKey</code>: Your API key.</li>
+            <li><code class="code inline">creation</code>: An ISO 8601 compliant date for the time the API key was created.</li>
+            <li><code class="code inline">wallet</code>: Your API wallet. You should transfer BNB to this address to recharge your credits.</li>
+            <li><code class="code inline">credit</code>: The amount of your unspent credits.</li>
+            <li><code class="code inline">origin</code>: Your requests will only be processed if the request's origin match your API key origin field. This field will not be present if you did not fill an origin when creating the API key.</li>
+            <li><code class="code inline">note</code>: A personal informative note about the key. This field will only be present if you filled a note when creating your key.</li>
+            <li><code class="code inline">usage</code>: The API key Usage:
+                <ul>
+                    <li><code class="code inline">apiKeyHour</code>: Requests made using your API key in the last hour.</li>
+                    <li><code class="code inline">ipHour</code>: Requests made using your your ip address in the last hour.</li>
+                    <li><code class="code inline">apiKeyTotal</code>: Total requests made using your API key.</li>
+                    <li><code class="code inline">ipTotal</code>: Total requests made using your ip address.</li>
+                </ul>
+            </li>
+        </ul> 
+
+        <h3>API key credit recharge history</h3>
+
+        <p>lorem ipsum</p>
+        
+        <h3>API key usage log</h3>
+        
+        <p>lorem ipsum</p>
+        
         <h2>Credits</h2>
 
         <p>The backend oracle software providing the gas prices for this website is forked from <a href="https://github.com/JustLiquidity/Gas-Station-BinanceSmartChain" target="_blank" rel="noopener">JustLiquidity</a>, a fork from <a href="https://github.com/ethgasstation/gasstation-express-oracle"
@@ -282,8 +326,11 @@
 </html>
 
 <!-- TODO: -->
-<!-- Retrieve gas paid so we can estimate cost in bnb/usd per transaction -->
-<!-- When we get a decent amount of API calls, ask for partners for ads -->
-
 <!-- update docs with the new key functions -->
 <!-- run api update for every key once a hour -->
+<!-- make history endpoint count requests -->
+
+<!-- FUTURE -->
+<!-- Retrieve gas paid so we can estimate cost in bnb/usd per transaction -->
+<!-- UPDATE oracle to output gas limit averages -->
+<!-- When we get a decent amount of API calls, ask for partners for ads -->

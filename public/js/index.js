@@ -591,7 +591,8 @@ const gasTimer = {
         else{
             document.querySelectorAll('.gas .body').forEach((e,i) => {
                 if (data[speedList[i]]){
-                    e.innerHTML = `${data[speedList[i]]} GWei`;
+                    e.querySelector('.gwei').innerHTML = `${data[speedList[i]]} GWei`;
+                    // e.querySelector('.usd').innerHTML = `$${data[speedList[i]] * 0.000000001}`;
                 }
             });
 
@@ -1150,6 +1151,26 @@ const api = {
         setTimeout(() => input.value = oldText, 500);
 
         navigator.clipboard.writeText(oldText);
+    },
+
+    getLimits: async function(){
+        return await (await fetch(`/limits`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+        })).json();
     }
 };
 document.querySelector('#manage-apikey').addEventListener('click', () => api.showModal());
+
+const limits = await api.getLimits();
+document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.USAGE_LIMIT);
+document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
+document.querySelector('#credit-bnb').innerHTML = `$${(await price.get()).now * 0.00000001}`;
+
+document.querySelectorAll('.fill-apikey').forEach(e => e.addEventListener('keyup', () => {
+    document.querySelectorAll('.fill-apikey').forEach(x => {
+        const a = x.parentNode.querySelector('a');
+        a.setAttribute('href', a.dataset.href.replace('{{}}', e.value));
+        x.value = e.value;
+    });
+}))
