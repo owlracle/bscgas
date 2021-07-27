@@ -59,19 +59,31 @@
         <div id="gas-container">
             <div class="gas">
                 <div class="title">Slow <i class="far fa-question-circle"></i></div>
-                <div class="body">0 GWei</div>
+                <div class="body">
+                    <div class="gwei">0 GWei</div>
+                    <!-- <div class="usd">$0</div> -->
+                </div>
             </div>
             <div class="gas">
                 <div class="title">Standard <i class="far fa-question-circle"></i></div>
-                <div class="body">0 GWei</div>
+                <div class="body">
+                    <div class="gwei">0 GWei</div>
+                    <!-- <div class="usd">$0</div> -->
+                </div>
             </div>
             <div class="gas">
                 <div class="title">Fast <i class="far fa-question-circle"></i></div>
-                <div class="body">0 GWei</div>
+                <div class="body">
+                    <div class="gwei">0 GWei</div>
+                    <!-- <div class="usd">$0</div> -->
+                </div>
             </div>
             <div class="gas">
                 <div class="title">Instant <i class="far fa-question-circle"></i></div>
-                <div class="body">0 GWei</div>
+                <div class="body">
+                    <div class="gwei">0 GWei</div>
+                    <!-- <div class="usd">$0</div> -->
+                </div>
             </div>
         </div>
 
@@ -112,7 +124,7 @@
 
         <pre class="code"><code><a href="/gas" data-href="/gas?apikey={{}}" target="_blank">https://bscgas.info/gas?apikey=</a><input class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
 
-        <p>You dont't need to inform an <code class="code inline">apikey</code> if you are behind a public IP address and have low usage requirements, otherwise check the <a href="#api-keys-sec">API keys</a> section.</p>
+        <p>The <code class="code inline">apikey</code> argument is required only if you are not behind a public IP address or have high usage requirements. If that's the case, check the <a href="#api-keys-sec">API keys</a> section.</p>
 
         <p>The endpoint will answer with a <a href="https://en.wikipedia.org/wiki/JSON" target="_blank">JSON string</a> with the following format:</p>
 
@@ -218,11 +230,11 @@
 
         <h2 id="api-keys-sec">API keys</h2>
 
-        <p>When you access our endpoints, you need to be behind a public ip address or use an API key. In either case, you can request our data <code class="code inline request-limit"></code> times per hour for free. After reaching that limit, you can continue to make requests either waiting a few minutes or using your api credit.</p>
+        <p>When you access our endpoints, you need to be behind a public ip address or use an API key. In either case, you can request our data up to <code class="code inline request-limit"></code> times per hour for free. After reaching that limit, you can continue to make requests either waiting a few minutes or using your api credit.</p>
 
-        <h3>API keys console</h3>
+        <h3>API keys window</h3>
 
-        <p>You can use the button below or the one <a href="#search">in the header</a> of this page to create, edit, and get information about your API keys.</p>
+        <p>You can use the button below or the one <a href="#search">in the header</a> of this page to create, edit, and get information about your API keys. You can also use this window to update your credit recharges in real-time.</p>
 
         <div id="apikey-container"><button id="manage-apikey"><i class="fas fa-key"></i>Manage API keys</button></div>
 
@@ -230,17 +242,22 @@
 
         <p>After reaching the free request limit (<code class="code inline request-limit"></code> requests in the last hour), each new request will subtract <code class="code inline request-cost"></code> credits from your API account. Each credit is worth <code class="code inline">0.00000001 BNB</code> (around <code id="credit-bnb" class="code inline request-limit"></code> at current BNB price).</p>
         
-        <p>Any time you want to recharge your API credits, you can make a BNB transfer of any amount to your API wallet. After the transfer, use our API console to make sure your credits are updated.</p>
+        <p>Any time you want to recharge your API credits, you can make a BNB transfer of any amount to your API wallet. After the transfer, our server will update your api credits automatically within one hour. If you want to be credited instantly, just keep the API key information window open, and the credits will be refreshed every five seconds.</p>
         
-        <p class="quote">To avoid unnecessary calls, and safety measures regarding your API keys, we strongly advise reading our <a href="#faq">FAQ</a></p>
+        <p class="quote">To avoid unnecessary calls, and safety measures regarding your API keys, we strongly advise reading our <a href="#faq">FAQ</a>.</p>
+
 
         <h3>API key information</h3>
 
         <p>You can access information about your API key using the keys endpoint</p>
 
-        <pre class="code"><code><a href="/keys" data-href="/keys/{{}}" target="_blank">https://bscgas.info/keys/</a><input class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
+        <pre class="code"><code><a href="/keys" data-href="/keys/{{}}" target="_blank">https://bscgas.info/keys/</a><input id="key-get-info" class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
+    
+        <div id="key-get-info-container">
+            <p class="quote">Fill your API key in the above field to get a sample response</p>
+        </div>
 
-        <p>If the request went through, you will get a JSON response with the following fields:</p>
+        <p>If the request is succeeded, you will get a JSON response with the following fields:</p>
 
         <ul>
             <li><code class="code inline">apiKey</code>: Your API key.</li>
@@ -259,14 +276,53 @@
             </li>
         </ul> 
 
+
         <h3>API key credit recharge history</h3>
 
-        <p>lorem ipsum</p>
-        
+        <p>Get information about every api recharge</p>
+
+        <pre class="code"><code><a href="/credit" data-href="/credit/{{}}" target="_blank">https://bscgas.info/credit/</a><input id="key-credit-info" class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
+
+        <div id="key-credit-info-container">
+            <p class="quote">Fill an API key having at least one recharge in the above field to get a sample response</p>
+        </div>
+
+        <p>On a success, the result will be a JSON containing <code class="code inline">message</code> and <code class="code inline">results</code> fields. The <code class="code inline">results</code> field is an array containing information about each API recharge transaction, where each element is an Object with the following fields:</p>
+
+        <ul>
+            <li><code class="code inline">tx</code>: The transaction hash of your deposit. You can check <a href="https://bscscan.com/" target="_blank" >Bscscan</a> for details about the transaction.</li>
+            <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the time of the transaction.</li>
+            <li><code class="code inline">value</code>: Credits deposited. <code class="code inline">1 credit = 0.00000001 BNB</code>.</li>
+            <li><code class="code inline">fromWallet</code>: The wallet that sent the credits to your API wallet.</li>
+        </ul> 
+
+
         <h3>API key usage log</h3>
         
-        <p>lorem ipsum</p>
-        
+        <p>Get information about your API key usage</p>
+
+        <pre class="code"><code><a href="/logs" data-href="/logs/{{}}" target="_blank">https://bscgas.info/logs/</a><input id="key-logs-info" class="fill-apikey" type="text" placeholder="YOUR_API_KEY"><a>?fromtime=0000&totime=0000</a></code></pre>
+
+        <div id="key-logs-info-container">
+            <p class="quote">Fill an API key that have been used in the last hour in the above field to get a sample response</p>
+        </div>
+
+        <p>The arguments <code class="code inline">fromtime</code> and <code class="code inline">totime</code> are optional. They define the time range od your search:</p>
+
+        <ul>
+            <li><code class="code inline">fromtime</code>: The time (unix timestamp) you want to start your search. <i>Default: one hour in the past</i>. </li>
+            <li><code class="code inline">totime</code>: The time (unix timestamp) you want to end your search. <i>Default: now</i>.</li>
+        </ul> 
+
+        <p>On a success, the result will be an array of JSON objects for each of your API key requests. Each record have the following fields:</p>
+
+        <ul>
+            <li><code class="code inline">ip</code>: The ip address of the request. <code class="code inline">null</code> if the request was made from a private ip.</li>
+            <li><code class="code inline">origin</code>: The origin of the request. This is the domain (the website name) that originates the request. <code class="code inline">null</code> if the request did not originate from a website (or called from the client browser).</li>
+            <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the time of the transaction.</li>
+        </ul> 
+
+
         <h2>Credits</h2>
 
         <p>The backend oracle software providing the gas prices for this website is forked from <a href="https://github.com/JustLiquidity/Gas-Station-BinanceSmartChain" target="_blank" rel="noopener">JustLiquidity</a>, a fork from <a href="https://github.com/ethgasstation/gasstation-express-oracle"

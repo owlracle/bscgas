@@ -1143,6 +1143,22 @@ const api = {
         })).json();
     },
 
+    getLogs: async function(key, fromTime, toTime) {
+        let options = {};
+        if (fromTime){
+            options.fromTime = fromTime;
+        }
+        if (toTime){
+            options.toTime = toTime;
+        }
+        options = Object.keys(options).length == 0 ? '' : '?' + Object.entries(options).map(([key, value]) => `${key}=${value}`).join('&');
+
+        return await (await fetch(`/logs/${key}${options}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+        })).json();
+    },
+
     copyText: function(parent){
         const input = parent.querySelector('input');
         const oldText = input.value;
@@ -1165,12 +1181,69 @@ document.querySelector('#manage-apikey').addEventListener('click', () => api.sho
 const limits = await api.getLimits();
 document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.USAGE_LIMIT);
 document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
-document.querySelector('#credit-bnb').innerHTML = `$${(await price.get()).now * 0.00000001}`;
+document.querySelector('#credit-bnb').innerHTML = `$${((await price.get()).now * 0.00000001).toFixed(10)}`;
 
-document.querySelectorAll('.fill-apikey').forEach(e => e.addEventListener('keyup', () => {
-    document.querySelectorAll('.fill-apikey').forEach(x => {
-        const a = x.parentNode.querySelector('a');
-        a.setAttribute('href', a.dataset.href.replace('{{}}', e.value));
-        x.value = e.value;
+document.querySelectorAll('.fill-apikey').forEach(e => {
+    e.addEventListener('keyup', () => {
+        document.querySelectorAll('.fill-apikey').forEach(x => {
+            const a = x.parentNode.querySelector('a');
+            a.setAttribute('href', a.dataset.href.replace('{{}}', e.value));
+            x.value = e.value;
+
+            x.style.width = `${e.value.length * 7.4}px`
+        });
     });
-}))
+    e.addEventListener('input', () => {
+        if (e.value.match(api.regex.apiKey)){
+            buildSamples(e.value);
+        }
+    });
+});
+
+async function buildSamples(key){
+    let data = await api.getKey(key);
+    // create a sample response when typing a valid api key
+    if (data.apiKey){
+        const container = document.querySelector('#key-get-info-container');
+        
+        data.usage = `{\n        ${Object.entries(data.usage).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json number">${value}</span>`).join(',\n        ')}\n    }`;
+        const content = Object.entries(data).map(([key, value]) => {
+            let valueDom = '';
+            if (key == 'credit'){
+                valueDom = `<span class="json number">${value}</span>`;
+            }
+            else if (key == 'usage'){
+                valueDom = data.usage;
+            }
+            else {
+                valueDom = `<span class="json string">"${value}"</span>`;
+            }
+
+            return `<span class="json key">"${key}"</span>: ${valueDom}`;
+        }).join(',\n    ');
+        container.innerHTML = `<p>Sample response:</p><pre class="code"><code>{\n    ${content}\n}</code></pre>`;
+    }
+
+    data = await api.getCredit(key);
+    if (data.message == 'success' && data.results.length > 0){
+        const container = document.querySelector('#key-credit-info-container');
+        
+        const result = Object.entries(data.results[0]).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json string">"${value}"</span>`).join(',\n            ');
+
+        const content = Object.entries(data).map(([key, value]) => {
+            if (key == 'message'){
+                return `<span class="json key">"${key}"</span>: <span class="json string">"${value}"</span>`;
+            }
+            return `<span class="json key">"${key}"</span>: [\n        {\n            ${result}\n        },\n\n        ...\n    ]`;
+        }).join(',\n    ');;
+        container.innerHTML = `<p>Sample response:</p><pre class="code"><code>{\n    ${content}\n}</code></pre>`;
+    }
+
+    data = await api.getLogs(key);
+    if (!data.error && data.length > 0){
+        console.log(data)
+        const container = document.querySelector('#key-logs-info-container');
+        const content = Object.entries(data[0]).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json ${value ? 'string' : 'number'}">${value ? `"${value}"`: value}</span>`).join(',\n        ');
+        container.innerHTML = `<p>Sample response:</p><pre class="code"><code>[\n    {\n        ${content},\n    },\n\n    ...\n]</code></pre>`;
+    }
+}
