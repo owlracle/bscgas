@@ -364,8 +364,63 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
 });
 
 
+// legacy gas endpoint. soon to be disabled
 app.get('/gas', cors(corsOptions), async (req, res) => {
-    const key = req.query.apikey;
+    try {
+        const data = await requestOracle();
+
+        const resp = {};
+        resp.timestamp = new Date().toISOString();
+
+        if (data.standard){
+            resp.slow = data.safeLow;
+            resp.standard = data.standard;
+            resp.fast = data.fast;
+            resp.instant = data.fastest;
+            resp.block_time = data.block_time;
+            resp.last_block = data.blockNum;
+        }
+        else {
+            resp.error = 'Oracle is restarting';
+        }
+
+        const sqlData = {};
+        sqlData.endpoint = 'gas';
+    
+        if (req.header('x-real-ip')){
+            sqlData.ip = req.header('x-real-ip');
+        }
+        if (req.header('Origin')){
+            sqlData.origin = req.header('Origin');
+        }
+
+        const [rows, error] = await db.insert('api_requests', sqlData);
+
+        if (error){
+            resp.error = {
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to record api request into the database.',
+                serverMessage: error,
+            };
+        }
+
+        res.send(resp);
+    }
+    catch (error){
+        res.status(500);
+        res.send({
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while trying to fetch information from price oracle.',
+            serverMessage: error,
+        });
+    }
+});
+
+
+app.get('/gas/:key', cors(corsOptions), async (req, res) => {
+    const key = req.params.key;
     const resp = {};
     const sqlData = {};
     const usage = { ip: 0, apiKey: 0 };
