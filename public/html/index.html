@@ -175,47 +175,18 @@
 
         <p>The API will return an array of <a href="https://www.investopedia.com/terms/c/candlestick.asp" target="_blank">candlesticks</a> built from aggregate data of the requested timeframe. The array is ordered from decreasing timestamps.</p>
 
-        <pre class="code"><code>[
-    {
-        <span class="json key">"instant"</span>: {
-            <span class="json key">"open"</span>: <span class="json number">number</span>,
-            <span class="json key">"close"</span>: <span class="json number">number</span>,
-            <span class="json key">"low"</span>: <span class="json number">number</span>,
-            <span class="json key">"high"</span>: <span class="json number">number</span>,
-        },
-        <span class="json key">"fast"</span>: {
-            <span class="json key">"open"</span>: <span class="json number">number</span>,
-            <span class="json key">"close"</span>: <span class="json number">number</span>,
-            <span class="json key">"low"</span>: <span class="json number">number</span>,
-            <span class="json key">"high"</span>: <span class="json number">number</span>,
-        },
-        <span class="json key">"standard"</span>: {
-            <span class="json key">"open"</span>: <span class="json number">number</span>,
-            <span class="json key">"close"</span>: <span class="json number">number</span>,
-            <span class="json key">"low"</span>: <span class="json number">number</span>,
-            <span class="json key">"high"</span>: <span class="json number">number</span>,
-        },
-        <span class="json key">"slow"</span>: {
-            <span class="json key">"open"</span>: <span class="json number">number</span>,
-            <span class="json key">"close"</span>: <span class="json number">number</span>,
-            <span class="json key">"low"</span>: <span class="json number">number</span>,
-            <span class="json key">"high"</span>: <span class="json number">number</span>,
-        },
-        <span class="json key">"timestamp"</span>: <span class="json string">string</span>,
-        <span class="json key">"samples"</span>: <span class="json number">number</span>
-    },
-
-    ...
-]</code></pre>
+        <div id="history-sample-container"></div>
 
         <ul>
             <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the candlestick time.</li>
             <li><code class="code inline">samples</code>: Number of samples composing the candle.</li>
             <li><code class="code inline">instant</code>, <code class="code inline">fast</code>, <code class="code inline">standard</code>, <code class="code inline">slow</code>: Gas price information regarding each speed (check <a href="#endpoint-gas">gas</a> endpoint for an explanation about speeds).</li>
-            <li><code class="code inline">open</code>: The gas price reported on the first moment of the candle.</li>
-            <li><code class="code inline">close</code>: The gas price reported on the last moment of the candle.</li>
-            <li><code class="code inline">low</code>: The lowest gas price reported on the entire candle.</li>
-            <li><code class="code inline">high</code>: The highest gas price reported on the entire candle.</li>
+            <ul>
+                <li><code class="code inline">open</code>: The gas price reported on the first moment of the candle.</li>
+                <li><code class="code inline">close</code>: The gas price reported on the last moment of the candle.</li>
+                <li><code class="code inline">low</code>: The lowest gas price reported on the entire candle.</li>
+                <li><code class="code inline">high</code>: The highest gas price reported on the entire candle.</li>
+            </ul>
         </ul> 
 
 
@@ -244,7 +215,7 @@
         
         <p>Any time you want to recharge your API credits, you can make a BNB transfer of any amount to your API wallet. After the transfer, our server will update your api credits automatically within one hour. If you want to be credited instantly, just keep the API key information window open, and the credits will be refreshed every five seconds.</p>
         
-        <p class="quote">To avoid unnecessary calls, and safety measures regarding your API keys, we strongly advise reading our <a href="#faq">FAQ</a>.</p>
+        <p class="quote">To avoid unnecessary calls, and get informed about safety measures regarding your API keys, we strongly advise reading our <a href="#faq">FAQ</a>.</p>
 
 
         <h3>API key information</h3>
@@ -254,7 +225,7 @@
         <pre class="code"><code><a href="/keys" data-href="/keys/{{}}" target="_blank">https://bscgas.info/keys/</a><input id="key-get-info" class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
     
         <div id="key-get-info-container">
-            <p class="quote">Fill your API key in the above field to get a sample response</p>
+            <p class="quote">Fill your API key in the field above to get a sample response with real data</p>
         </div>
 
         <p>If the request is succeeded, you will get a JSON response with the following fields:</p>
@@ -284,7 +255,7 @@
         <pre class="code"><code><a href="/credit" data-href="/credit/{{}}" target="_blank">https://bscgas.info/credit/</a><input id="key-credit-info" class="fill-apikey" type="text" placeholder="YOUR_API_KEY"></code></pre>
 
         <div id="key-credit-info-container">
-            <p class="quote">Fill an API key having at least one recharge in the above field to get a sample response</p>
+            <p class="quote">Fill an API key having at least one recharge in the above field to get a sample response with real data</p>
         </div>
 
         <p>On a success, the result will be a JSON containing <code class="code inline">message</code> and <code class="code inline">results</code> fields. The <code class="code inline">results</code> field is an array containing information about each API recharge transaction, where each element is an Object with the following fields:</p>
@@ -304,10 +275,10 @@
         <pre class="code"><code><a href="/logs" data-href="/logs/{{}}" target="_blank">https://bscgas.info/logs/</a><input id="key-logs-info" class="fill-apikey" type="text" placeholder="YOUR_API_KEY"><a>?fromtime=0000&totime=0000</a></code></pre>
 
         <div id="key-logs-info-container">
-            <p class="quote">Fill an API key that have been used in the last hour in the above field to get a sample response</p>
+            <p class="quote">Fill an API key that have been used in the last hour in the above field to get a sample response with real data</p>
         </div>
 
-        <p>The arguments <code class="code inline">fromtime</code> and <code class="code inline">totime</code> are optional. They define the time range od your search:</p>
+        <p>The arguments <code class="code inline">fromtime</code> and <code class="code inline">totime</code> are optional. They define the time range of your search:</p>
 
         <ul>
             <li><code class="code inline">fromtime</code>: The time (unix timestamp) you want to start your search. <i>Default: one hour in the past</i>. </li>
@@ -382,6 +353,8 @@
 </html>
 
 <!-- TODO: -->
+<!-- FAQ -->
+<!-- sample code codepen -->
 <!-- update docs with the new key functions -->
 <!-- run api update for every key once a hour -->
 <!-- make history endpoint count requests -->

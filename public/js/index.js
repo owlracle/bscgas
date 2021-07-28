@@ -211,9 +211,9 @@ const chart = {
         });
     },
 
-    getHistory: async function(timeframe=60, page=1) {
+    getHistory: async function(timeframe=60, page=1, candles=this.candles) {
         this.timeframe = timeframe;
-        this.history = await (await fetch(`/history?timeframe=${timeframe}&page=${page}&candles=${this.candles}&to=${this.lastCandle}`)).json();
+        this.history = await (await fetch(`/history?timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
         return this.history;
     },
 
@@ -731,10 +731,10 @@ const api = {
         const tabsContent = this.tabsContent;
         tabsContent.edit.innerHTML = `<h2>Edit API key</h2>
         <p class="title">API Key</p>
-        <input type="text" class="input-text" id="key" placeholder="00000000000000000000000000000000">
+        <input type="text" class="input-text keys" id="key" placeholder="00000000000000000000000000000000">
         <span id="key-tip" class="tip"></span>
         <p class="title">API Secret</p>
-        <input type="text" class="input-text" id="secret" placeholder="00000000000000000000000000000000">
+        <input type="text" class="input-text keys" id="secret" placeholder="00000000000000000000000000000000">
         <span id="secret-tip" class="tip"></span>
         <p class="title origin">Origin <i class="far fa-question-circle"></i></p>
         <input type="text" class="input-text" id="origin" placeholder="mywebsite.com">
@@ -842,7 +842,7 @@ const api = {
         const tabsContent = this.tabsContent;
         tabsContent.info.innerHTML = `<h2>API key information</h2>
         <p class="title">API key</p>
-        <input type="text" class="input-text" id="key" placeholder="00000000000000000000000000000000">
+        <input type="text" class="input-text keys" id="key" placeholder="00000000000000000000000000000000">
         <span id="key-tip" class="tip"></span>
         <div id="button-container"><button id="get-key">Search</button></div>`;
 
@@ -1195,55 +1195,152 @@ document.querySelectorAll('.fill-apikey').forEach(e => {
     });
     e.addEventListener('input', () => {
         if (e.value.match(api.regex.apiKey)){
-            buildSamples(e.value);
+            dynamicSamples.update(e.value);
         }
     });
 });
 
-async function buildSamples(key){
-    let data = await api.getKey(key);
-    // create a sample response when typing a valid api key
-    if (data.apiKey){
-        const container = document.querySelector('#key-get-info-container');
-        
-        data.usage = `{\n        ${Object.entries(data.usage).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json number">${value}</span>`).join(',\n        ')}\n    }`;
-        const content = Object.entries(data).map(([key, value]) => {
-            let valueDom = '';
-            if (key == 'credit'){
-                valueDom = `<span class="json number">${value}</span>`;
-            }
-            else if (key == 'usage'){
-                valueDom = data.usage;
-            }
-            else {
-                valueDom = `<span class="json string">"${value}"</span>`;
-            }
+const dynamicSamples = {
+    history: {
+        getData: async function(){
+            return await chart.getHistory(undefined, undefined, 1);
+        },
 
-            return `<span class="json key">"${key}"</span>: ${valueDom}`;
-        }).join(',\n    ');
-        container.innerHTML = `<p>Sample response:</p><pre class="code"><code>{\n    ${content}\n}</code></pre>`;
-    }
+        update: function(data){
+            const container = document.querySelector('#history-sample-container');
+            const content = Object.entries(data[0]).map(([key, value]) => {
+                if (key == 'timestamp' || key == 'samples'){
+                    value = `<span class="json ${typeof value}">${typeof value == 'number' ? value : `"${value}"`}</span>`;
+                }
+                else {
+                    value = Object.entries(value).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json ${typeof value}">${typeof value == 'number' ? value : `"${value}"`}</span>`).join(',\n            ');
+                    value = `{\n            ${value}\n        }`;
+                }
 
-    data = await api.getCredit(key);
-    if (data.message == 'success' && data.results.length > 0){
-        const container = document.querySelector('#key-credit-info-container');
-        
-        const result = Object.entries(data.results[0]).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json string">"${value}"</span>`).join(',\n            ');
+                return `<span class="json key">"${key}"</span>: ${value}`
+            }).join(',\n        ');
+            container.innerHTML = `<pre class="code"><code>[\n    {\n        ${content}\n    },\n\n    ...\n]</code></pre>`;
+        }
+    },
 
-        const content = Object.entries(data).map(([key, value]) => {
-            if (key == 'message'){
-                return `<span class="json key">"${key}"</span>: <span class="json string">"${value}"</span>`;
+    keys: {
+        placeholder: {
+            "apiKey": "00000000000000000000000000000000",
+            "creation": "0000-00-00T00:00:00.000Z",
+            "wallet": "0x0000000000000000000000000000000000000000",
+            "credit": 0,
+            "origin": "domain.com",
+            "note": "note to myself",
+            "usage": {
+                "apiKeyHour": 0,
+                "ipHour": 0,
+                "apiKeyTotal": 0,
+                "ipTotal": 0
             }
-            return `<span class="json key">"${key}"</span>: [\n        {\n            ${result}\n        },\n\n        ...\n    ]`;
-        }).join(',\n    ');;
-        container.innerHTML = `<p>Sample response:</p><pre class="code"><code>{\n    ${content}\n}</code></pre>`;
-    }
+        },
 
-    data = await api.getLogs(key);
-    if (!data.error && data.length > 0){
-        console.log(data)
-        const container = document.querySelector('#key-logs-info-container');
-        const content = Object.entries(data[0]).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json ${value ? 'string' : 'number'}">${value ? `"${value}"`: value}</span>`).join(',\n        ');
-        container.innerHTML = `<p>Sample response:</p><pre class="code"><code>[\n    {\n        ${content},\n    },\n\n    ...\n]</code></pre>`;
-    }
-}
+        getData: async function(key){
+            if (!key){
+                return this.placeholder;
+            }
+            const data = await api.getKey(key);
+            if (data.apiKey){
+                this.realData = true;
+                return data;
+            }
+            return this.placeholder;
+        },
+
+        update: function(data) {
+            const container = document.querySelector('#key-get-info-container');
+            
+            data.usage = `{\n        ${Object.entries(data.usage).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json number">${value}</span>`).join(',\n        ')}\n    }`;
+            const content = Object.entries(data).map(([key, value]) => {
+                let valueDom = '';
+                if (key == 'usage'){
+                    valueDom = data.usage;
+                }
+                else {
+                    valueDom = `<span class="json ${typeof value}">${typeof value == 'number' ? value : `"${value}"`}</span>`;
+                }
+
+                return `<span class="json key">"${key}"</span>: ${valueDom}`;
+            }).join(',\n    ');
+            const tip = this.realData ? '' : container.querySelector('.quote').outerHTML;
+            container.innerHTML = `<p>Sample response:</p>${tip}<pre class="code"><code>{\n    ${content}\n}</code></pre>`;
+        }
+    },
+
+    credit: {
+        placeholder: {
+            "message": "success",
+            "results": [{
+                "tx": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "timestamp": "2000-00-00T00:00:00.000Z",
+                "value": "0",
+                "fromWallet": "0x0000000000000000000000000000000000000000"
+            }]
+        },
+
+        getData: async function(key){
+            if (!key){
+                return this.placeholder;
+            }
+            const data = await api.getCredit(key);
+            if (data.message == 'success' && data.results.length > 0){
+                this.realData = true;
+                return data;
+            }
+            return this.placeholder;
+        },
+
+        update: function(data) {
+            const container = document.querySelector('#key-credit-info-container');
+            const result = Object.entries(data.results[0]).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json string">"${value}"</span>`).join(',\n            ');
+            const content = Object.entries(data).map(([key, value]) => {
+                if (key == 'message'){
+                    return `<span class="json key">"${key}"</span>: <span class="json string">"${value}"</span>`;
+                }
+                return `<span class="json key">"${key}"</span>: [\n        {\n            ${result}\n        },\n\n        ...\n    ]`;
+            }).join(',\n    ');
+            const tip = this.realData ? '' : container.querySelector('.quote').outerHTML;
+            container.innerHTML = `<p>Sample response:</p>${tip}<pre class="code"><code>{\n    ${content}\n}</code></pre>`;
+        },
+    },
+
+    logs: {
+        placeholder: [{
+            "ip": "255.255.255.255",
+            "origin": "domain.com",
+            "timestamp": "0000-00-00T00:00:00.000Z",
+        }],
+
+        getData: async function(key){
+            if (!key){
+                return this.placeholder;
+            }
+            const data = await api.getLogs(key);
+            if (!data.error && data.length > 0){
+                this.realData = true;
+                return data;
+            }
+            return this.placeholder;
+        },
+
+        update: function(data) {
+            const container = document.querySelector('#key-logs-info-container');
+            const content = Object.entries(data[0]).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json ${value ? 'string' : 'number'}">${value ? `"${value}"`: value}</span>`).join(',\n        ');
+
+            const tip = this.realData ? '' : container.querySelector('.quote').outerHTML;
+            container.innerHTML = `<p>Sample response:</p>${tip}<pre class="code"><code>[\n    {\n        ${content},\n    },\n\n    ...\n]</code></pre>`;
+        },
+    },
+
+    update: async function(key){
+        if (!key){
+            this.history.update(await this.history.getData());
+        }
+        [this.keys, this.credit, this.logs].forEach(async item => item.update(await item.getData(key)));
+    },
+};
+dynamicSamples.update();
