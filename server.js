@@ -434,14 +434,14 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
         res.status(resp.error.status);
         res.send(resp.error);
     }
-    else if (!usage.ip && !key){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You must get behind a public ip address or use an api key.'
-        });
-    }
+    // else if (!usage.ip && !key){
+    //     res.status(403);
+    //     res.send({
+    //         status: 403,
+    //         error: 'Forbidden',
+    //         message: 'You must get behind a public ip address or use an api key.'
+    //     });
+    // }
     else if (!key && usage.ip >= USAGE_LIMIT){
         res.status(403);
         res.send({
@@ -810,8 +810,32 @@ const db = {
         const sql = `UPDATE ${table} SET ${changesSql} WHERE ${filter}`;
         return this.query(sql);
     },
+
+    connect: function(){
+        this.connection = mysql.createConnection(configFile.mysql);
+
+        this.connection.connect( opt => {
+            const content = [
+                'Connected',
+                new Date().toISOString(),
+                JSON.stringify(opt),
+            ];
+            fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
+        });
+
+        this.connection.on('error', error => {
+            const content = [
+                'Disconnected',
+                new Date().toISOString(),
+                JSON.stringify(error),
+            ];
+            fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
+
+            this.connect();
+        });
+    },
 };
-db.connection = mysql.createConnection(configFile.mysql);
+db.connect();
 
 // https://api.bscscan.com/api?module=account&action=txlist&address=0xBB512Ff07Dcb062Aeb31ade8dECbeD3C4A89ceF1&startblock=8500000&endblock=8960295&sort=asc&apikey=7GM7EHRDJQUIC8MDAKU9MP9R678F21C2N3
 // result[i]
