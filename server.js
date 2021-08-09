@@ -761,8 +761,34 @@ app.put('/credit/:key', async (req, res) => {
 
 
 const db = {
+    working: false,
+
     query: async function(sql) {
-        return new Promise(resolve => this.connection.execute(sql, (error, rows) => resolve([rows, error])));
+        return new Promise(resolve => this.connection.execute(sql, (error, rows) => {
+            if (error && error.fatal){
+                if (this.connection){
+                    this.connection.destroy();
+                }
+                // const content = [
+                //     'Disconnected',
+                //     new Date().toISOString(),
+                //     JSON.stringify(error),
+                // ];
+                // fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
+                
+                if (this.working){
+                    telegram.alert('Bscgas down!');
+                }
+                
+                this.working = false;
+
+                this.connect();
+                setTimeout(async () => resolve(await this.query(sql)), 1000);
+            }
+            else{
+                resolve([rows, error])
+            }
+        }));
     },
 
     // {field_1: 0, field_2: 'a'}
@@ -812,27 +838,26 @@ const db = {
     },
 
     connect: function(){
-        this.connection = mysql.createConnection(configFile.mysql);
-
-        this.connection.connect( opt => {
-            const content = [
-                'Connected',
-                new Date().toISOString(),
-                JSON.stringify(opt),
-            ];
-            fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
-        });
-
-        this.connection.on('error', error => {
-            const content = [
-                'Disconnected',
-                new Date().toISOString(),
-                JSON.stringify(error),
-            ];
-            fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
-
-            this.connect();
-        });
+        if (!this.working){
+            this.connection = mysql.createConnection(configFile.mysql);
+    
+            this.connection.connect( opt => {
+                // const content = [
+                //     'Connected',
+                //     new Date().toISOString(),
+                //     JSON.stringify(opt),
+                // ];
+                // fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
+    
+                if (!opt){
+                    if (!this.working){
+                        telegram.alert('Bscgas Up!');
+                    }
+    
+                    this.working = true;
+                }
+            });
+        }
     },
 };
 db.connect();
@@ -858,3 +883,22 @@ const bscscan = {
         return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&endblock=${to}&apikey=${this.apiKey}`)).json();
     }
 };
+
+const telegram = {
+    url: `https://api.telegram.org/bot{{token}}/sendMessage?chat_id={{chatId}}&text=`,
+
+    alert: async function(message){
+        if (!this.token){
+            const config = JSON.parse(fs.readFileSync("config.json")).telegram;
+            this.token = config.token;
+            this.chatId = config.chatId;
+
+            this.url = this.url.replace(`{{token}}`, this.token).replace(`{{chatId}}`, this.chatId);
+        }
+        if (typeof message !== 'string'){
+            message = JSON.stringify(message);
+        }
+
+        return await (await fetch(this.url + encodeURIComponent(message))).json();
+    }
+}
