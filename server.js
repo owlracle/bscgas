@@ -23,6 +23,10 @@ process.argv.forEach((val, index, array) => {
     if ((val == '-ns' || val == '--not-save')){
         saveDB = false;
     }
+    if (val == '-t' || val == '--test'){
+        configFile.production = false;
+        console.log('Production mode OFF');
+    }
 });
 
 app.use(express.urlencoded({ extended: true }));
@@ -69,7 +73,17 @@ app.post('/keys', async (req, res) => {
         }
 
         // get block height now so I know where to start looking for transactions
-        data.blockChecked = await bscscan.getBlockHeight();
+        data.blockChecked = parseInt(await bscscan.getBlockHeight());
+
+        if (isNaN(data.blockChecked)){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error getting network block height',
+                serverMessage: data.blockChecked,
+            });
+        }
 
         const [rows, error] = await db.insert('api_keys', data);
     
@@ -876,7 +890,7 @@ const bscscan = {
     getBlockHeight: async function() {
         const timeNow = (new Date().getTime() / 1000).toFixed(0);
         let block = await (await fetch(`https://api.bscscan.com/api?module=block&action=getblocknobytime&timestamp=${timeNow}&closest=before&apikey=${this.apiKey}`)).json();
-        return parseInt(block.result);
+        return block.result;
     },
 
     getTx: async function(wallet, from, to){
@@ -889,9 +903,8 @@ const telegram = {
 
     alert: async function(message){
         if (!this.token){
-            const config = JSON.parse(fs.readFileSync("config.json")).telegram;
-            this.token = config.token;
-            this.chatId = config.chatId;
+            this.token = configFile.telegram.token;
+            this.chatId = configFile.telegram.chatId;
 
             this.url = this.url.replace(`{{token}}`, this.token).replace(`{{chatId}}`, this.chatId);
         }
@@ -899,6 +912,7 @@ const telegram = {
             message = JSON.stringify(message);
         }
 
-        return await (await fetch(this.url + encodeURIComponent(message))).json();
+        const resp = configFile.production ? await (await fetch(this.url + encodeURIComponent(message))).json() : true;
+        return resp;
     }
 }
