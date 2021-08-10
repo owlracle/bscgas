@@ -307,6 +307,60 @@ body {
             }
         }
 
+        .url {
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-intense-color);
+            color: var(--text-intense-color);
+            border-radius: 3px;
+            padding: 5px 15px;
+            overflow-x: auto;
+            display: flex;
+            align-items: center;
+            transition: 0.2s background ease-out;
+            font-family: monospace;
+            
+            &.clicked {
+                background-color: #00ff0020;
+            }
+
+
+            .button-get {
+                border-radius: 3px;
+                border: 1px solid var(--text-color);
+                padding: 2px 5px;
+                font-size: 0.9rem;
+                margin-right: 10px;
+                cursor: pointer;
+                transition: 0.3s all;
+    
+                &:hover {
+                    background-color: #00ff0020;
+                }
+    
+                i {
+                    margin-right: 5px;
+                    font-size: 0.8rem;
+                }
+            }
+
+            .button-copy {
+                flex-grow: 1;
+                display: flex;
+                justify-content: flex-end;
+
+                i {
+                    border-radius: 100%;
+                    cursor: pointer;
+                    transition: 0.3s all;
+                    padding: 10px;
+
+                    &:hover {
+                        background-color: #00ff0020;
+                    }
+                }
+            }
+        }
+
         .red {
             color: red;
         }
@@ -345,9 +399,10 @@ body {
             outline: none;
             background-color: transparent;
             color: #71abd2;
-            width: 90px;
-            min-width: 90px;
+            width: 105px;
+            min-width: 105px;
             font-family: monospace;
+            font-size: 1rem;
         }
     }
 

@@ -147,7 +147,7 @@ const chart = {
                 this.history = [...oldHistory, ...newHistory];
 
                 this.update(this.history);
-                console.log(this.history);
+                // console.log(this.history);
                 this.page++;
                 this.scrolling = false;
 
@@ -1183,23 +1183,6 @@ document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.US
 document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
 document.querySelector('#credit-bnb').innerHTML = `$${((await price.get()).now * 0.00000001).toFixed(10)}`;
 
-document.querySelectorAll('.fill-apikey').forEach(e => {
-    e.addEventListener('keyup', () => {
-        document.querySelectorAll('.fill-apikey').forEach(x => {
-            const a = x.parentNode.querySelector('a');
-            a.setAttribute('href', a.dataset.href.replace('{{}}', e.value));
-            x.value = e.value;
-
-            x.style.width = `${e.value.length * 7.4}px`
-        });
-    });
-    e.addEventListener('input', () => {
-        if (e.value.match(api.regex.apiKey)){
-            dynamicSamples.update(e.value);
-        }
-    });
-});
-
 const dynamicSamples = {
     history: {
         getData: async function(){
@@ -1344,3 +1327,82 @@ const dynamicSamples = {
     },
 };
 dynamicSamples.update();
+
+class UrlBox {
+    constructor(element, {
+        method = 'GET',
+        href = '#',
+        variables = {},
+    }){
+        this.content = href;
+        this.href = href;
+        this.mask = href;
+
+        const domain = 'https://bscgas.info';
+        const placeholder = 'YOUR_API_KEY';
+
+        // replace apikey keyword with input
+        this.href = this.href.replace(`{{apikey}}`, placeholder);
+        this.content = this.content.replace(`{{apikey}}`, `</a><input class="fill-apikey" type="text" placeholder="${placeholder}"><a href="${this.href}" target="_blank">`);
+
+        // fill variables
+        Object.entries(variables).forEach(([k, v]) => {
+            this.content = this.content.split(`{{${k}}}`).join(v.toString());
+            this.href = this.href.split(`{{${k}}}`).join(v.toString());
+            this.mask = this.mask.split(`{{${k}}}`).join(v.toString());
+        });
+
+        this.content = `
+            <span class="button-get"><i class="far fa-question-circle"></i>${method}</span>
+            <a href="${this.href}" target="_blank">${domain}${this.content}</a>
+            <span class="button-copy"><i class="far fa-copy"></i></span>
+        `;
+
+        element.innerHTML = this.content;
+
+        new Tooltip(element.querySelector('.button-get'), 'GET request URL using all available arguments with their default values');
+
+        // click on copy
+        element.querySelector('.button-copy').addEventListener('click', () => {
+            navigator.clipboard.writeText(element.querySelector('a').href);
+            const box = element.querySelector('.button-copy').parentNode;
+            box.classList.add('clicked');
+            setTimeout(() => box.classList.remove('clicked'), 200);
+        });
+
+        // when type an apikey, all fields update
+        element.querySelectorAll('.fill-apikey').forEach(input => {
+            input.addEventListener('keyup', () => {
+                document.querySelectorAll('.fill-apikey').forEach(x => {
+                    const href = Array.from(x.parentNode.querySelectorAll('a, input')).map(e => e.textContent || e.value).join('');
+                    x.parentNode.querySelectorAll('a').forEach(e => e.href = href);
+                    x.value = input.value;
+                    x.style.width = `${input.value.length * 8.75}px`;
+                });
+            });
+
+            input.addEventListener('input', () => {
+                if (input.value.match(api.regex.apiKey)){
+                    dynamicSamples.update(input.value);
+                }
+            });
+        });
+
+    }
+}
+
+// define sample requests url box
+new UrlBox(document.querySelector('#url-gas.url'), { href: `/gas?apikey={{apikey}}` });
+new UrlBox(document.querySelector('#url-history.url'), {
+    href: `/history?apikey={{apikey}}&from=0&to={{now}}&page=1&candles=1000&timeframe=30`,
+    variables: { now: (new Date().getTime() / 1000).toFixed(0) }
+});
+new UrlBox(document.querySelector('#url-keys.url'), { href: `/keys/{{apikey}}` });
+new UrlBox(document.querySelector('#url-credit.url'), { href: `/credit/{{apikey}}` });
+new UrlBox(document.querySelector('#url-logs.url'), {
+    href: `/logs/{{apikey}}?fromtime={{past1h}}&totime={{now}}`,
+    variables: {
+        past1h: (new Date().getTime() / 1000 - 3600).toFixed(0),
+        now: (new Date().getTime() / 1000).toFixed(0)
+    }
+});
