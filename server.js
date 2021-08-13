@@ -30,21 +30,291 @@ process.argv.forEach((val, index, array) => {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-app.get('/', (req, res) => {
-    res.sendFile(`${__dirname}/public/html/index.html`);
-});
-
 const corsOptions = {
     origin: '*',
     optionsSuccessStatus: 200,
 };
 
+
+app.get('/', (req, res) => {
+    res.sendFile(`${__dirname}/public/html/index.html`);
+});
+
+app.use(express.static(__dirname + '/public/'));
+
+app.listen(port, () => {
+    console.log(`Listening to port ${port}`);
+});
+
+
+// --- ROUTES ---
+
+// helper endpoint to discover api limits
 app.get('/limits', async (req, res) => {
     res.send({
         USAGE_LIMIT: USAGE_LIMIT,
         REQUEST_COST: REQUEST_COST,
     });
 });
+
+
+// discover gas prices right now
+app.get('/gas', cors(corsOptions), async (req, res) => {
+    const key = req.query.apikey;
+    const resp = {};
+    const sqlData = {};
+    const usage = { ip: 0, apiKey: 0 };
+    let credit = 0;
+
+    // check how many requests using ip
+    if (req.header('x-real-ip')){
+        const ip = req.header('x-real-ip');
+        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`);
+
+        if (error){
+            resp.error = {
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to discover your api usage.',
+                serverMessage: error,
+            };
+        }
+        else {
+            usage.ip = rows[0].total;
+        }
+    }
+
+    let keyPromise = true;
+    if (key){
+        keyPromise = new Promise(async resolve => {
+            const [rows, error] = await db.query(`SELECT id, apiKey, credit, origin FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+
+            if (error){
+                resp.error = {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to retrieve api key information from database',
+                    serverMessage: error
+                };
+                resolve(true);
+            }
+            else{
+                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+
+                if (row.length == 0){
+                    resp.error = {
+                        status: 401,
+                        error: 'Unauthorized',
+                        message: 'Could not find your api key.'
+                    };
+                    resolve(true);
+                }
+                else{
+                    sqlData.apiKey = row[0].id;
+                    credit = row[0].credit;
+                    
+                    let originAllow = true;
+                    const apiOrigin = row[0].origin;
+                    if (apiOrigin){
+                        if (req.header('Origin')){
+                            const realOrigin = req.header('Origin').match(originRegex)[1];
+                            if (apiOrigin != realOrigin){
+                                originAllow = false;
+                            }
+                        }
+                        else{
+                            originAllow = false;
+                        }
+                    }
+
+                    if (originAllow) {
+                        // discorver usage from api key
+                        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`);
+    
+                        if (error){
+                            resp.error = {
+                                status: 500,
+                                error: 'Internal Server Error',
+                                message: 'Error while trying to discover your api usage.',
+                                serverMessage: error,
+                            };
+                        }
+                        else {
+                            usage.apiKey = rows[0].total;
+                        }
+                    }
+                    else {
+                        resp.error = {
+                            status: 403,
+                            error: 'Forbidden',
+                            message: 'The API key your are using does not allow calls from this origin.',
+                        };
+                    }
+
+                    resolve(true);
+            
+                }
+            }
+        })
+    }
+
+    await keyPromise;
+
+    if (resp.error){
+        res.status(resp.error.status);
+        res.send(resp.error);
+    }
+    else if (!usage.ip && !key){
+        res.status(403);
+        res.send({
+            status: 403,
+            error: 'Forbidden',
+            message: 'You must get behind a public ip address or use an API key.'
+        });
+    }
+    else if (!key && usage.ip >= USAGE_LIMIT){
+        res.status(403);
+        res.send({
+            status: 403,
+            error: 'Forbidden',
+            message: 'You have reached the ip address request limit. Try using an API key.'
+        });
+    }
+    else if (key && credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
+        res.status(403);
+        res.send({
+            status: 403,
+            error: 'Forbidden',
+            message: 'You dont have enough credits. Recharge or wait a few minutes before trying again.'
+        });
+    }
+    else {
+        
+        try {
+            const data = await requestOracle();
+
+            if (key && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
+                // reduce credits
+                credit -= REQUEST_COST;
+                const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ${sqlData.apiKey}`);
+
+                if (error){
+                    resp.error = {
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while trying to update credits for api key usage.',
+                        serverMessage: error,
+                    };
+                }
+            }
+    
+            resp.timestamp = new Date().toISOString();
+    
+            if (data.standard){
+                resp.slow = data.safeLow;
+                resp.standard = data.standard;
+                resp.fast = data.fast;
+                resp.instant = data.fastest;
+                resp.block_time = data.block_time;
+                resp.last_block = data.blockNum;
+            }
+            else {
+                resp.error = 'Oracle is restarting';
+            }
+    
+            sqlData.endpoint = 'gas';
+    
+            if (req.header('x-real-ip')){
+                sqlData.ip = req.header('x-real-ip');
+            }
+            if (req.header('Origin')){
+                sqlData.origin = req.header('Origin');
+            }
+    
+            // save API request to DB for statistics purpose
+            const [rows, error] = await db.insert('api_requests', sqlData);
+
+            if (error){
+                resp.error = {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to record api request into the database.',
+                    serverMessage: error,
+                };
+            }
+    
+            res.send(resp);
+        }
+        catch (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to fetch information from price oracle.',
+                serverMessage: error,
+            });
+        }
+    }
+    
+});
+
+
+// get gas cached. useful for website frontend
+app.get('/gascached', async (req, res) => {
+    const cache = JSON.parse(fs.readFileSync(`${__dirname}/cached_gas.json`));
+    res.send(cache);
+});
+
+
+// price history
+app.get('/history', cors(corsOptions), async (req, res) => {
+    const key = req.query.apikey;
+
+    const listTimeframes = {
+        '10m': 10,
+        '30m': 30,
+        '1h': 60,
+        '2h': 120,
+        '4h': 240,
+        '1d': 1440,
+    };
+
+    const timeframe = Object.keys(listTimeframes).includes(req.query.timeframe) ? listTimeframes[req.query.timeframe] : 
+        (Object.values(listTimeframes).map(e => e.toString()).includes(req.query.timeframe) ? req.query.timeframe : 30);
+
+    const candles = Math.max(Math.min(req.query.candles || 1000, 1000), 1);
+    const offset = (parseInt(req.query.page) - 1) * candles || 0;
+    const speeds = ['instant', 'fast', 'standard', 'slow'];
+
+    const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
+    
+    const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${req.query.from || 0}' AND '${req.query.to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
+
+    if (error){
+        res.status(500);
+        res.send({
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while retrieving price history information from database.',
+            serverMessage: error,
+        });
+    }
+    else {
+        const fields = ['open', 'close', 'low', 'high'];
+
+        res.send(rows.map(row => {
+            const tempRow = Object.fromEntries(speeds.map(speed => 
+                [speed, Object.fromEntries(fields.map(field => 
+                    [field, row[`${speed}.${field}`]]
+                ))]
+            ));
+            tempRow.timestamp = row.timestamp;
+            tempRow.samples = row.samples;
+            return tempRow;
+        }));
+    }
+});
+
 
 // generate new api key
 app.post('/keys', async (req, res) => {
@@ -364,292 +634,7 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
 });
 
 
-app.get('/gas', cors(corsOptions), async (req, res) => {
-    const key = req.query.apikey;
-    const resp = {};
-    const sqlData = {};
-    const usage = { ip: 0, apiKey: 0 };
-    let credit = 0;
-
-    // check how many requests using ip
-    if (req.header('x-real-ip')){
-        const ip = req.header('x-real-ip');
-        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`);
-
-        if (error){
-            resp.error = {
-                status: 500,
-                error: 'Internal Server Error',
-                message: 'Error while trying to discover your api usage.',
-                serverMessage: error,
-            };
-        }
-        else {
-            usage.ip = rows[0].total;
-        }
-    }
-
-    let keyPromise = true;
-    if (key){
-        keyPromise = new Promise(async resolve => {
-            const [rows, error] = await db.query(`SELECT id, apiKey, credit, origin FROM api_keys WHERE peek = '${key.slice(-4)}'`);
-
-            if (error){
-                resp.error = {
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to retrieve api key information from database',
-                    serverMessage: error
-                };
-                resolve(true);
-            }
-            else{
-                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
-
-                if (row.length == 0){
-                    resp.error = {
-                        status: 401,
-                        error: 'Unauthorized',
-                        message: 'Could not find your api key.'
-                    };
-                    resolve(true);
-                }
-                else{
-                    sqlData.apiKey = row[0].id;
-                    credit = row[0].credit;
-                    
-                    let originAllow = true;
-                    const apiOrigin = row[0].origin;
-                    if (apiOrigin){
-                        if (req.header('Origin')){
-                            const realOrigin = req.header('Origin').match(originRegex)[1];
-                            if (apiOrigin != realOrigin){
-                                originAllow = false;
-                            }
-                        }
-                        else{
-                            originAllow = false;
-                        }
-                    }
-
-                    if (originAllow) {
-                        // discorver usage from api key
-                        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`);
-    
-                        if (error){
-                            resp.error = {
-                                status: 500,
-                                error: 'Internal Server Error',
-                                message: 'Error while trying to discover your api usage.',
-                                serverMessage: error,
-                            };
-                        }
-                        else {
-                            usage.apiKey = rows[0].total;
-                        }
-                    }
-                    else {
-                        resp.error = {
-                            status: 403,
-                            error: 'Forbidden',
-                            message: 'The API key your are using does not allow calls from this origin.',
-                        };
-                    }
-
-                    resolve(true);
-            
-                }
-            }
-        })
-    }
-
-    await keyPromise;
-
-    if (resp.error){
-        res.status(resp.error.status);
-        res.send(resp.error);
-    }
-    else if (!usage.ip && !key){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You must get behind a public ip address or use an API key.'
-        });
-    }
-    else if (!key && usage.ip >= USAGE_LIMIT){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You have reached the ip address request limit. Try using an API key.'
-        });
-    }
-    else if (key && credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You dont have enough credits. Recharge or wait a few minutes before trying again.'
-        });
-    }
-    else {
-        
-        try {
-            const data = await requestOracle();
-
-            if (key && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
-                // reduce credits
-                credit -= REQUEST_COST;
-                const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ${sqlData.apiKey}`);
-
-                if (error){
-                    resp.error = {
-                        status: 500,
-                        error: 'Internal Server Error',
-                        message: 'Error while trying to update credits for api key usage.',
-                        serverMessage: error,
-                    };
-                }
-            }
-    
-            resp.timestamp = new Date().toISOString();
-    
-            if (data.standard){
-                resp.slow = data.safeLow;
-                resp.standard = data.standard;
-                resp.fast = data.fast;
-                resp.instant = data.fastest;
-                resp.block_time = data.block_time;
-                resp.last_block = data.blockNum;
-            }
-            else {
-                resp.error = 'Oracle is restarting';
-            }
-    
-            sqlData.endpoint = 'gas';
-    
-            if (req.header('x-real-ip')){
-                sqlData.ip = req.header('x-real-ip');
-            }
-            if (req.header('Origin')){
-                sqlData.origin = req.header('Origin');
-            }
-    
-            // save API request to DB for statistics purpose
-            const [rows, error] = await db.insert('api_requests', sqlData);
-
-            if (error){
-                resp.error = {
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to record api request into the database.',
-                    serverMessage: error,
-                };
-            }
-    
-            res.send(resp);
-        }
-        catch (error){
-            res.status(500);
-            res.send({
-                status: 500,
-                error: 'Internal Server Error',
-                message: 'Error while trying to fetch information from price oracle.',
-                serverMessage: error,
-            });
-        }
-    }
-    
-});
-
-
-app.get('/gascached', async (req, res) => {
-    const cache = JSON.parse(fs.readFileSync(`${__dirname}/cached_gas.json`));
-    res.send(cache);
-});
-
-async function cacheGas(){
-    try{
-        const data = await requestOracle();
-
-        if (data.standard){
-            const resp = {};
-            resp.timestamp = new Date().toISOString();
-            resp.slow = data.safeLow;
-            resp.standard = data.standard;
-            resp.fast = data.fast;
-            resp.instant = data.fastest;
-            resp.block_time = data.block_time;
-            resp.last_block = data.blockNum;
-
-            fs.writeFileSync(`${__dirname}/cached_gas.json`, JSON.stringify(resp));
-        }
-        else {
-            throw new Error('Could not get information from oracle.');
-        }
-    }
-    catch (error) {
-        console.log(error);
-    }
-    finally {
-        setTimeout(() => cacheGas(), 1000 * 30); // 30 secs
-    }
-}
-cacheGas();
-
-
-app.get('/history', cors(corsOptions), async (req, res) => {
-    const listTimeframes = {
-        '10m': 10,
-        '30m': 30,
-        '1h': 60,
-        '2h': 120,
-        '4h': 240,
-        '1d': 1440,
-    };
-
-    const timeframe = Object.keys(listTimeframes).includes(req.query.timeframe) ? listTimeframes[req.query.timeframe] : 
-        (Object.values(listTimeframes).map(e => e.toString()).includes(req.query.timeframe) ? req.query.timeframe : 30);
-
-    const candles = Math.max(Math.min(req.query.candles || 1000, 1000), 1);
-    const offset = (parseInt(req.query.page) - 1) * candles || 0;
-    const speeds = ['instant', 'fast', 'standard', 'slow'];
-
-    const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
-    
-    const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${req.query.from || 0}' AND '${req.query.to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
-
-    if (error){
-        res.status(500);
-        res.send({
-            status: 500,
-            error: 'Internal Server Error',
-            message: 'Error while retrieving price history information from database.',
-            serverMessage: error,
-        });
-    }
-    else {
-        const fields = ['open', 'close', 'low', 'high'];
-
-        res.send(rows.map(row => {
-            const tempRow = Object.fromEntries(speeds.map(speed => 
-                [speed, Object.fromEntries(fields.map(field => 
-                    [field, row[`${speed}.${field}`]]
-                ))]
-            ));
-            tempRow.timestamp = row.timestamp;
-            tempRow.samples = row.samples;
-            return tempRow;
-        }));
-    }
-});
-
-app.use(express.static(__dirname + '/public/'));
-
-app.listen(port, () => {
-    console.log(`Listening to port ${port}`);
-});
+// --- helper functions and objects ---
 
 async function requestOracle(){
     if (configFile.production){
@@ -883,6 +868,7 @@ const db = {
 };
 db.connection = mysql.createConnection(configFile.mysql);
 
+
 const bscscan = {
     apiKey: configFile.bscscan,
 
@@ -896,3 +882,38 @@ const bscscan = {
         return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&endblock=${to}&apikey=${this.apiKey}`)).json();
     }
 };
+
+
+async function cacheGas(){
+    try{
+        const data = await requestOracle();
+
+        if (data.standard){
+            const resp = {};
+            resp.timestamp = new Date().toISOString();
+            resp.slow = data.safeLow;
+            resp.standard = data.standard;
+            resp.fast = data.fast;
+            resp.instant = data.fastest;
+            resp.block_time = data.block_time;
+            resp.last_block = data.blockNum;
+
+            fs.writeFileSync(`${__dirname}/cached_gas.json`, JSON.stringify(resp));
+        }
+        else {
+            throw new Error('Could not get information from oracle.');
+        }
+    }
+    catch (error) {
+        console.log(error);
+    }
+    finally {
+        setTimeout(() => cacheGas(), 1000 * 30); // 30 secs
+    }
+}
+cacheGas();
+
+
+const apiKey = {
+
+}
