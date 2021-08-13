@@ -248,8 +248,7 @@ const theme = {
             chart.setTheme(name);
 
             if (oldName != name && window.__CPEmbed){
-                document.querySelector('#codepen').innerHTML = codepenEmbed.split('{{THEME}}').join(name);
-                window.__CPEmbed("#codepen .codepen");
+                codePens.forEach(e => e.update());
             }
         }
     },
@@ -632,9 +631,36 @@ function setColorGradient(elem, time){
 
 }
 
-const codepenEmbed = `<p class="codepen" data-height="265" data-theme-id="{{THEME}}" data-default-tab="js,result" data-user="pswerlang" data-slug-hash="GRWQzzR" style="height: 265px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid; margin: 1em 0; padding: 1em;" data-pen-title="BSC gas price sample code"><span>See the Pen <a href="https://codepen.io/pswerlang/pen/GRWQzzR">BSC gas price sample code</a> by Pablo (<a href="https://codepen.io/pswerlang">@pswerlang</a>) on <a href="https://codepen.io">CodePen</a>.</span></p>`;
-document.querySelector('#codepen').innerHTML = codepenEmbed.split('{{THEME}}').join(theme.get());
-import('https://cpwebassets.codepen.io/assets/embed/ei.js');
+// codepen ID, fill divs with an embed codepen
+class CodePen {
+    static started = false;
+
+    constructor(element, id) {
+        this.id = id;
+        this.element = element;
+
+        this.update();
+    }
+
+    async init() {
+        if (super.started){
+            return true;
+        }
+
+        const ready = await import('https://cpwebassets.codepen.io/assets/embed/ei.js');
+        super.started = true;
+        return ready;
+    }
+
+    update(){
+        this.init().then(() => {
+            const codepenEmbed = `<p class="codepen" data-height="265" data-theme-id="{{THEME}}" data-default-tab="js,result" data-user="pswerlang" data-slug-hash="${this.id}" style="height: 265px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid; margin: 1em 0; padding: 1em;" data-pen-title="BSC gas price sample code"><span>See the Pen <a href="https://codepen.io/pswerlang/pen/${this.id}">BSC gas price sample code</a> by Pablo (<a href="https://codepen.io/pswerlang">@pswerlang</a>) on <a href="https://codepen.io">CodePen</a>.</span></p>`;
+            this.element.innerHTML = codepenEmbed.split('{{THEME}}').join(theme.get());
+            window.__CPEmbed();
+        });
+    }
+}
+const codePens = ['PomVooa', 'yLbZLeB'].map((v,i) => new CodePen(document.querySelector(`#codepen${i+1}`), v));
 
 
 // post method for testing purposes

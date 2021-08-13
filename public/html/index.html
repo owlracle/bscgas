@@ -128,7 +128,7 @@
 
         <p>The endpoint will answer with a <a href="https://en.wikipedia.org/wiki/JSON" target="_blank">JSON string</a> with the following fields:</p>
 
-        <ul>
+        <ul class="args">
             <li><code class="code inline">timestamp</code>: An <a href="https://www.w3.org/TR/NOTE-datetime">ISO 8601</a> compliant date for when the API returned the result.</li>
             <li><code class="code inline">slow</code>: Estimated minimum Gwei to be paid for a transaction that will be safely accepted. That means it can take a while (usually about half an hour).</li>
             <li><code class="code inline">standard</code>: Estimated Gwei paid recently where the transaction was accepted on 60% of the blocks.  It usually takes about a minute.</li>
@@ -155,7 +155,7 @@
 
         <p>You can pass the following arguments in a GET request:</p>
 
-        <ul>
+        <ul class="args">
             <li><code class="code inline">apikey</code>: Your <a href="#api-keys-sec">API key</a>.</li>
             <li><code class="code inline">from</code>: <a href="https://www.unixtimestamp.com/" target="_blank">Unix timestamp</a> representing the time where your search will start from. <i>Default 0</i>.</li>
             <li><code class="code inline">to</code>: Unix timestamp representing the time where to finish your search. <i>Default current timestamp</i>.</li>
@@ -168,11 +168,11 @@
 
         <div id="history-sample-container"></div>
 
-        <ul>
+        <ul class="args">
             <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the candlestick time.</li>
             <li><code class="code inline">samples</code>: Number of samples composing the candle.</li>
             <li><code class="code inline">instant</code>, <code class="code inline">fast</code>, <code class="code inline">standard</code>, <code class="code inline">slow</code>: Gas price information regarding each speed (check <a href="#endpoint-gas">gas</a> endpoint for an explanation about speeds).</li>
-            <ul>
+            <ul class="args">
                 <li><code class="code inline">open</code>: The gas price reported on the first moment of the candle.</li>
                 <li><code class="code inline">close</code>: The gas price reported on the last moment of the candle.</li>
                 <li><code class="code inline">low</code>: The lowest gas price reported on the entire candle.</li>
@@ -185,11 +185,8 @@
 
         <p>Fetching data from our API is as simple as a GET request:</p>
 
-        <div id="codepen"></div>
+        <div id="codepen1"></div>
         
-        <p class="quote">If your API requests take a little while to get a response, please keep in mind that the oracle consumes a moderate amount of resources. It is running on my own low-spec server. Consider a <a class="donate-link">donation</a> to help bscgas to get better quality hardware.</p>
-
-
         <h2 id="api-keys-sec">API keys</h2>
 
         <p>When you access our endpoints, you need to be behind a public ip address or use an API key. In either case, you can request our data up to <code class="code inline request-limit"></code> times per hour for free. After reaching that limit, you can continue to make requests either waiting a few minutes or using your api credit.</p>
@@ -199,6 +196,15 @@
         <p>You can use the button below or the one <a href="#search">in the header</a> of this page to create, edit, and get information about your API keys. You can also use this window to update your credit recharges in real-time.</p>
 
         <div id="apikey-container"><button id="manage-apikey"><i class="fas fa-key"></i>Manage API keys</button></div>
+        
+        <p>Please keep in mind that you should use your API key in your server's code, never in the front-end code, mainly because of these two reasons:
+
+        <ul>
+            <li>Keys exposed in the front-end will enable users to look at your source-code, even if it is obfuscated, thus compromising your key.</li>
+            <li>If used in the front-end, every user request will trigger a call to our endpoints. Depending on your app's traffic, that will make your API key consume the free calls per hour quickly, and beyond that your api credit.</li>
+        </ul>
+            
+        <p>You can make your calls to our endpoint in your server code, save the result in a file, then every time your users requests the information you could send the cached result. Remember to schedule calls to our endpoints at regular intervals to make sure your cached data is always up-to-date.</p>
 
         <h3>API Credit</h3>
 
@@ -221,7 +227,7 @@
 
         <p>If the request is succeeded, you will get a JSON response with the following fields:</p>
 
-        <ul>
+        <ul class="args">
             <li><code class="code inline">apiKey</code>: Your API key.</li>
             <li><code class="code inline">creation</code>: An ISO 8601 compliant date for the time the API key was created.</li>
             <li><code class="code inline">wallet</code>: Your API wallet. You should transfer BNB to this address to recharge your credits.</li>
@@ -229,7 +235,7 @@
             <li><code class="code inline">origin</code>: Your requests will only be processed if the request's origin match your API key origin field. This field will not be present if you did not fill an origin when creating the API key.</li>
             <li><code class="code inline">note</code>: A personal informative note about the key. This field will only be present if you filled a note when creating your key.</li>
             <li><code class="code inline">usage</code>: The API key Usage:
-                <ul>
+                <ul class="args">
                     <li><code class="code inline">apiKeyHour</code>: Requests made using your API key in the last hour.</li>
                     <li><code class="code inline">ipHour</code>: Requests made using your your ip address in the last hour.</li>
                     <li><code class="code inline">apiKeyTotal</code>: Total requests made using your API key.</li>
@@ -251,7 +257,7 @@
 
         <p>On a success, the result will be a JSON containing <code class="code inline">message</code> and <code class="code inline">results</code> fields. The <code class="code inline">results</code> field is an array containing information about each API recharge transaction, where each element is an Object with the following fields:</p>
 
-        <ul>
+        <ul class="args">
             <li><code class="code inline">tx</code>: The transaction hash of your deposit. You can check <a href="https://bscscan.com/" target="_blank" >Bscscan</a> for details about the transaction.</li>
             <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the time of the transaction.</li>
             <li><code class="code inline">value</code>: Credits deposited. <code class="code inline">1 credit = 0.00000001 BNB</code>.</li>
@@ -267,7 +273,7 @@
                 
         <p>You can pass the optional arguments <code class="code inline">fromtime</code> and <code class="code inline">totime</code>. They define the time range of your search:</p>
 
-        <ul>
+        <ul class="args">
             <li><code class="code inline">fromtime</code>: The time (unix timestamp) you want to start your search. <i>Default: one hour in the past</i>. </li>
             <li><code class="code inline">totime</code>: The time (unix timestamp) you want to end your search. <i>Default: now</i>.</li>
         </ul> 
@@ -278,11 +284,18 @@
 
         <p>On a success, the result will be an array of JSON objects for each of your API key requests. Each record have the following fields:</p>
 
-        <ul>
+        <ul class="args">
             <li><code class="code inline">ip</code>: The ip address of the request. <code class="code inline">null</code> if the request was made from a private ip.</li>
             <li><code class="code inline">origin</code>: The origin of the request. This is the domain (the website name) that originates the request. <code class="code inline">null</code> if the request did not originate from a website (or called from the client browser).</li>
             <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the time of the transaction.</li>
         </ul> 
+
+
+        <h2>Sample Code</h2>
+
+        <p>You can fetch your API key information with a GET request:</p>
+
+        <div id="codepen2"></div>
 
 
         <h2>Credits</h2>
@@ -345,15 +358,13 @@
 
 <!-- TODO: -->
 
-<!-- prepared statements -->
-<!-- pooling connections -->
-
 <!-- FAQ -->
-<!-- sample code codepen -->
 <!-- run api update for every key once a hour -->
 <!-- make history endpoint count requests -->
 
 <!-- FUTURE -->
+<!-- prepared statements -->
+<!-- pooling connections -->
 <!-- Retrieve gas paid so we can estimate cost in bnb/usd per transaction -->
 <!-- UPDATE oracle to output gas limit averages -->
 <!-- When we get a decent amount of API calls, ask for partners for ads -->

@@ -332,8 +332,8 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
     
                 if (req.header('x-real-ip')){
                     const ip = req.header('x-real-ip');
-                    hourIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip} AND timestamp >= now() - INTERVAL 1 HOUR`;
-                    totalIp = `SELECT count(*) FROM api_requests WHERE ip = ${ip}`;
+                    hourIp = `SELECT count(*) FROM api_requests WHERE ip = '${ip}' AND timestamp >= now() - INTERVAL 1 HOUR`;
+                    totalIp = `SELECT count(*) FROM api_requests WHERE ip = '${ip}'`;
                 }
     
     
@@ -485,7 +485,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             message: 'You have reached the ip address request limit. Try using an API key.'
         });
     }
-    else if (key && credit < 0){
+    else if (key && credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
         res.status(403);
         res.send({
             status: 403,
