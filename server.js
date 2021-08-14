@@ -15,8 +15,6 @@ let saveDB = true;
 const USAGE_LIMIT = 100;
 const REQUEST_COST = 10;
 
-const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
-
 // receive args
 process.argv.forEach((val, index, array) => {
     if ((val == '-p' || val == '--port') && array[index+1]){
@@ -61,201 +59,96 @@ app.get('/limits', async (req, res) => {
 // discover gas prices right now
 app.get('/gas', cors(corsOptions), async (req, res) => {
     const key = req.query.apikey;
-    const resp = {};
+    let resp = {};
     const sqlData = {};
     const usage = { ip: 0, apiKey: 0 };
     let credit = 0;
 
-    // check how many requests using ip
-    if (req.header('x-real-ip')){
-        const ip = req.header('x-real-ip');
-        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`);
+    if (key){
+        const keyRow = await api.getKeyInfo(key);
+        const originValidation = api.validateOrigin(keyRow.origin, req.header('Origin'));
 
-        if (error){
-            resp.error = {
-                status: 500,
-                error: 'Internal Server Error',
-                message: 'Error while trying to discover your api usage.',
-                serverMessage: error,
-            };
+        if (keyRow.error){
+            resp.error = keyRow.error;
+        }
+        else if (originValidation.error) {
+            resp.error = originValidation.error;
         }
         else {
-            usage.ip = rows[0].total;
+            sqlData.apiKey = keyRow.result.id;
+            credit = keyRow.result.credit;
         }
     }
 
-    let keyPromise = true;
-    if (key){
-        keyPromise = new Promise(async resolve => {
-            const [rows, error] = await db.query(`SELECT id, apiKey, credit, origin FROM api_keys WHERE peek = '${key.slice(-4)}'`);
-
-            if (error){
-                resp.error = {
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to retrieve api key information from database',
-                    serverMessage: error
-                };
-                resolve(true);
-            }
-            else{
-                const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
-
-                if (row.length == 0){
-                    resp.error = {
-                        status: 401,
-                        error: 'Unauthorized',
-                        message: 'Could not find your api key.'
-                    };
-                    resolve(true);
-                }
-                else{
-                    sqlData.apiKey = row[0].id;
-                    credit = row[0].credit;
-                    
-                    let originAllow = true;
-                    const apiOrigin = row[0].origin;
-                    if (apiOrigin){
-                        if (req.header('Origin')){
-                            const realOrigin = req.header('Origin').match(originRegex)[1];
-                            if (apiOrigin != realOrigin){
-                                originAllow = false;
-                            }
-                        }
-                        else{
-                            originAllow = false;
-                        }
-                    }
-
-                    if (originAllow) {
-                        // discorver usage from api key
-                        const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${sqlData.apiKey}' AND timestamp > now() - INTERVAL 1 HOUR`);
-    
-                        if (error){
-                            resp.error = {
-                                status: 500,
-                                error: 'Internal Server Error',
-                                message: 'Error while trying to discover your api usage.',
-                                serverMessage: error,
-                            };
-                        }
-                        else {
-                            usage.apiKey = rows[0].total;
-                        }
-                    }
-                    else {
-                        resp.error = {
-                            status: 403,
-                            error: 'Forbidden',
-                            message: 'The API key your are using does not allow calls from this origin.',
-                        };
-                    }
-
-                    resolve(true);
-            
-                }
-            }
-        })
+    const usageCheck = await api.getUsage(sqlData.apiKey, req.header('x-real-ip'));
+    if (usageCheck.error && !resp.error){
+        resp.error = usageCheck.error;
     }
-
-    await keyPromise;
+    else if (usageCheck.usage) {
+        Object.entries(usageCheck.usage).forEach((k,v) => usage[k] = v);
+    }
 
     if (resp.error){
         res.status(resp.error.status);
         res.send(resp.error);
+        return;
     }
-    else if (!usage.ip && !key){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You must get behind a public ip address or use an API key.'
-        });
-    }
-    else if (!key && usage.ip >= USAGE_LIMIT){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You have reached the ip address request limit. Try using an API key.'
-        });
-    }
-    else if (key && credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
-        res.status(403);
-        res.send({
-            status: 403,
-            error: 'Forbidden',
-            message: 'You dont have enough credits. Recharge or wait a few minutes before trying again.'
-        });
-    }
-    else {
-        
-        try {
-            const data = await requestOracle();
 
-            if (key && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
-                // reduce credits
-                credit -= REQUEST_COST;
-                const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ${sqlData.apiKey}`);
-
-                if (error){
-                    resp.error = {
-                        status: 500,
-                        error: 'Internal Server Error',
-                        message: 'Error while trying to update credits for api key usage.',
-                        serverMessage: error,
-                    };
-                }
-            }
-    
-            resp.timestamp = new Date().toISOString();
-    
-            if (data.standard){
-                resp.slow = data.safeLow;
-                resp.standard = data.standard;
-                resp.fast = data.fast;
-                resp.instant = data.fastest;
-                resp.block_time = data.block_time;
-                resp.last_block = data.blockNum;
-            }
-            else {
-                resp.error = 'Oracle is restarting';
-            }
-    
-            sqlData.endpoint = 'gas';
-    
-            if (req.header('x-real-ip')){
-                sqlData.ip = req.header('x-real-ip');
-            }
-            if (req.header('Origin')){
-                sqlData.origin = req.header('Origin');
-            }
-    
-            // save API request to DB for statistics purpose
-            const [rows, error] = await db.insert('api_requests', sqlData);
-
-            if (error){
-                resp.error = {
-                    status: 500,
-                    error: 'Internal Server Error',
-                    message: 'Error while trying to record api request into the database.',
-                    serverMessage: error,
-                };
-            }
-    
-            res.send(resp);
-        }
-        catch (error){
-            res.status(500);
-            res.send({
-                status: 500,
-                error: 'Internal Server Error',
-                message: 'Error while trying to fetch information from price oracle.',
-                serverMessage: error,
-            });
-        }
+    resp = api.authorizeKey(key, usage, credit);
+    if (resp.error){
+        res.status(resp.error.status);
+        res.send(resp.error);
+        return;
     }
-    
+
+    resp = await requestOracle();
+    if (resp.error){
+        res.status(resp.error.status);
+        res.send(resp.error);
+        return;
+    }
+    const data = resp;
+
+    resp = await api.reduceCredit(sqlData.apiKey, usage, credit);
+    if (resp.error){
+        res.status(resp.error.status);
+        res.send(resp.error);
+        return;
+    }
+
+    resp.timestamp = new Date().toISOString();
+
+    if (data.standard){
+        resp.slow = data.safeLow;
+        resp.standard = data.standard;
+        resp.fast = data.fast;
+        resp.instant = data.fastest;
+        resp.block_time = data.block_time;
+        resp.last_block = data.blockNum;
+    }
+
+    sqlData.endpoint = 'gas';
+
+    if (req.header('x-real-ip')){
+        sqlData.ip = req.header('x-real-ip');
+    }
+    if (req.header('Origin')){
+        sqlData.origin = req.header('Origin');
+    }
+
+    // save API request to DB for statistics purpose
+    const [rows, error] = await db.insert('api_requests', sqlData);
+
+    if (error){
+        resp.error = {
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while trying to record api request into the database.',
+            serverMessage: error,
+        };
+    }
+
+    res.send(resp);
 });
 
 
@@ -637,10 +530,20 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
 // --- helper functions and objects ---
 
 async function requestOracle(){
-    if (configFile.production){
-        return (await fetch('http://127.0.0.1:8097')).json();
+    try{
+        if (configFile.production){
+            return (await fetch('http://127.0.0.1:8097')).json();
+        }
+        return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));    
     }
-    return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));
+    catch (error){
+        return { error: {
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while trying to fetch information from price oracle.',
+            serverMessage: error,
+        }};
+    }
 }
 
 // get prices to build database with price history
@@ -914,6 +817,150 @@ async function cacheGas(){
 cacheGas();
 
 
-const apiKey = {
+const api = {
+    getUsage: async function(keyId, ip) {
+        const usage = {};
 
+        if (ip) {
+            // get usage from ip
+            const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`);
+    
+            if (error){
+                return { error: {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to discover your api usage.',
+                    serverMessage: error,
+                }};
+            }
+
+            usage.ip = rows[0].total;
+        }
+
+        if (keyId) {
+            // sent key hash instead of id
+            if (typeof keyId === 'string' && keyId.length == 32){
+                const keyInfo = await this.getKeyInfo(keyId);
+                if (keyInfo.result){
+                    keyId = keyInfo.result.id;
+                }
+                else {
+                    return { error: keyInfo.error };
+                }
+            }
+
+            // discorver usage from api key
+            const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${keyId}' AND timestamp > now() - INTERVAL 1 HOUR`);
+    
+            if (error){
+                return { error: {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to discover your api usage.',
+                    serverMessage: error,
+                }};
+            }
+
+            usage.apiKey = rows[0].total;
+        }
+
+        return usage;
+    },
+
+    getKeyInfo: async function(key){
+        const [rows, error] = await db.query(`SELECT id, apiKey, credit, origin FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+
+        if (error){
+            return { error: {
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to retrieve api key information from database',
+                serverMessage: error
+            }};
+        }
+
+        const row = (await Promise.all(rows.map(row => bcrypt.compare(key, row.apiKey)))).map((e,i) => e ? rows[i] : false).filter(e => e);
+
+        if (row.length == 0){
+            return { error: {
+                status: 401,
+                error: 'Unauthorized',
+                message: 'Could not find your api key.'
+            }};
+        }
+
+        return { result: row[0] };
+    },
+
+    validateOrigin: async function(keyOrigin, reqOrigin){
+        const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
+
+        let originAllow = true;
+        if (keyOrigin){
+            if (reqOrigin){
+                const realOrigin = reqOrigin.match(originRegex)[1];
+                if (keyOrigin != realOrigin){
+                    originAllow = false;
+                }
+            }
+            else{
+                originAllow = false;
+            }
+        }
+
+        if (!originAllow){
+            return { error: {
+                status: 403,
+                error: 'Forbidden',
+                message: 'The API key your are using does not allow calls from this origin.',
+            }};
+        }
+
+        return true;
+    },
+
+    authorizeKey: function(key, usage, credit){
+        if (!usage.ip && !key){
+            return { error: {
+                status: 403,
+                error: 'Forbidden',
+                message: 'You must get behind a public ip address or use an API key.'
+            }};
+        }
+        else if (!key && usage.ip >= USAGE_LIMIT){
+            return { error: {
+                status: 403,
+                error: 'Forbidden',
+                message: 'You have reached the ip address request limit. Try using an API key.'
+            }};
+        }
+        else if (key && credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
+            return { error: {
+                status: 403,
+                error: 'Forbidden',
+                message: 'You dont have enough credits. Recharge or wait a few minutes before trying again.'
+            }};
+        }
+
+        return true;
+    },
+
+    reduceCredit: async function(keyId, usage, credit) {
+        if (keyId && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
+            // reduce credits
+            credit -= REQUEST_COST;
+            const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ${keyId}`);
+    
+            if (error){
+                return { error: {
+                    status: 500,
+                    error: 'Internal Server Error',
+                    message: 'Error while trying to update credits for api key usage.',
+                    serverMessage: error,
+                }};
+            }
+        }
+
+        return true;    
+    }
 }
