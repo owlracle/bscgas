@@ -493,56 +493,6 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
 });
 
 
-// --- helper functions and objects ---
-
-async function requestOracle(){
-    try{
-        if (configFile.production){
-            return (await fetch('http://127.0.0.1:8097')).json();
-        }
-        return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));    
-    }
-    catch (error){
-        return { error: {
-            status: 500,
-            error: 'Internal Server Error',
-            message: 'Error while trying to fetch information from price oracle.',
-            serverMessage: error,
-        }};
-    }
-}
-
-// get prices to build database with price history
-async function buildHistory(){
-    try{
-        const data = await requestOracle();
-
-        if (data.standard){
-            const [rows, error] = await db.insert(`price_history`, {
-                instant: data.fastest,
-                fast: data.fast,
-                standard: data.standard,
-                slow: data.safeLow,
-            });
-            
-            if (error){
-                console.log(error);
-            }
-        }
-    }
-    catch (error) {
-        console.log(error);
-    }
-    finally {
-        setTimeout(() => buildHistory(), 1000 * 60); // 1 minute
-    }
-}
-
-if (saveDB && configFile.production){
-    buildHistory();
-}
-
-
 // request credit info
 app.get('/credit/:key', cors(corsOptions), async (req, res) => {
     const key = req.params.key;
@@ -682,6 +632,56 @@ app.put('/credit/:key', async (req, res) => {
         }
     }
 });
+
+
+// --- helper functions and objects ---
+
+async function requestOracle(){
+    try{
+        if (configFile.production){
+            return (await fetch('http://127.0.0.1:8097')).json();
+        }
+        return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));    
+    }
+    catch (error){
+        return { error: {
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while trying to fetch information from price oracle.',
+            serverMessage: error,
+        }};
+    }
+}
+
+// get prices to build database with price history
+async function buildHistory(){
+    try{
+        const data = await requestOracle();
+
+        if (data.standard){
+            const [rows, error] = await db.insert(`price_history`, {
+                instant: data.fastest,
+                fast: data.fast,
+                standard: data.standard,
+                slow: data.safeLow,
+            });
+            
+            if (error){
+                console.log(error);
+            }
+        }
+    }
+    catch (error) {
+        console.log(error);
+    }
+    finally {
+        setTimeout(() => buildHistory(), 1000 * 60); // 1 minute
+    }
+}
+
+if (saveDB && configFile.production){
+    buildHistory();
+}
 
 
 const db = {
