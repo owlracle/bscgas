@@ -58,94 +58,40 @@ app.get('/limits', async (req, res) => {
 
 // discover gas prices right now
 app.get('/gas', cors(corsOptions), async (req, res) => {
-    const key = req.query.apikey;
-    let resp = {};
-    const sqlData = {};
-    const usage = { ip: 0, apiKey: 0 };
-    let credit = 0;
-
-    if (key){
-        const keyRow = await api.getKeyInfo(key);
-        const originValidation = api.validateOrigin(keyRow.origin, req.header('Origin'));
-
-        if (keyRow.error){
-            resp.error = keyRow.error;
+    let resp = await api.automate({
+        key: req.query.apikey,
+        origin: req.header('Origin'),
+        ip: req.header('x-real-ip'),
+        endpoint: 'gas',
+        action: {
+            data: {},
+            run: async () => {
+                const resp = {};
+    
+                const data = await requestOracle();
+                if (data.error){
+                    return { error: data.error };
+                }
+            
+                resp.timestamp = new Date().toISOString();
+            
+                if (data.standard){
+                    resp.slow = data.safeLow;
+                    resp.standard = data.standard;
+                    resp.fast = data.fast;
+                    resp.instant = data.fastest;
+                    resp.block_time = data.block_time;
+                    resp.last_block = data.blockNum;
+                }
+                
+                return resp;
+            }
         }
-        else if (originValidation.error) {
-            resp.error = originValidation.error;
-        }
-        else {
-            sqlData.apiKey = keyRow.result.id;
-            credit = keyRow.result.credit;
-        }
-    }
-
-    const usageCheck = await api.getUsage(sqlData.apiKey, req.header('x-real-ip'));
-    if (usageCheck.error && !resp.error){
-        resp.error = usageCheck.error;
-    }
-    else if (usageCheck.usage) {
-        Object.entries(usageCheck.usage).forEach((k,v) => usage[k] = v);
-    }
-
+    });
     if (resp.error){
-        res.status(resp.error.status);
+        res.status(resp.error.status || 500);
         res.send(resp.error);
         return;
-    }
-
-    resp = api.authorizeKey(key, usage, credit);
-    if (resp.error){
-        res.status(resp.error.status);
-        res.send(resp.error);
-        return;
-    }
-
-    resp = await requestOracle();
-    if (resp.error){
-        res.status(resp.error.status);
-        res.send(resp.error);
-        return;
-    }
-    const data = resp;
-
-    resp = await api.reduceCredit(sqlData.apiKey, usage, credit);
-    if (resp.error){
-        res.status(resp.error.status);
-        res.send(resp.error);
-        return;
-    }
-
-    resp.timestamp = new Date().toISOString();
-
-    if (data.standard){
-        resp.slow = data.safeLow;
-        resp.standard = data.standard;
-        resp.fast = data.fast;
-        resp.instant = data.fastest;
-        resp.block_time = data.block_time;
-        resp.last_block = data.blockNum;
-    }
-
-    sqlData.endpoint = 'gas';
-
-    if (req.header('x-real-ip')){
-        sqlData.ip = req.header('x-real-ip');
-    }
-    if (req.header('Origin')){
-        sqlData.origin = req.header('Origin');
-    }
-
-    // save API request to DB for statistics purpose
-    const [rows, error] = await db.insert('api_requests', sqlData);
-
-    if (error){
-        resp.error = {
-            status: 500,
-            error: 'Internal Server Error',
-            message: 'Error while trying to record api request into the database.',
-            serverMessage: error,
-        };
     }
 
     res.send(resp);
@@ -161,51 +107,71 @@ app.get('/gascached', async (req, res) => {
 
 // price history
 app.get('/history', cors(corsOptions), async (req, res) => {
-    const key = req.query.apikey;
+    let resp = await api.automate({
+        key: req.query.apikey,
+        origin: req.header('Origin'),
+        ip: req.header('x-real-ip'),
+        endpoint: 'history',
+        action: {
+            data: {
+                timeframe: req.query.timeframe,
+                candles: req.query.candles,
+                page: req.query.page,
+                from: req.query.from,
+                to: req.query.to,
+            },
+            run: async ({ timeframe, candles, page, from, to }) => {
+                const listTimeframes = {
+                    '10m': 10,
+                    '30m': 30,
+                    '1h': 60,
+                    '2h': 120,
+                    '4h': 240,
+                    '1d': 1440,
+                };
+            
+                timeframe = Object.keys(listTimeframes).includes(timeframe) ? listTimeframes[timeframe] : 
+                    (Object.values(listTimeframes).map(e => e.toString()).includes(timeframe) ? timeframe : 30);
+            
+                candles = Math.max(Math.min(candles || 1000, 1000), 1);
+                const offset = (parseInt(page) - 1) * candles || 0;
+                const speeds = ['instant', 'fast', 'standard', 'slow'];
+            
+                const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
+                
+                const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${from || 0}' AND '${to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
+            
+                if (error){
+                    return { error: {
+                        status: 500,
+                        error: 'Internal Server Error',
+                        message: 'Error while retrieving price history information from database.',
+                        serverMessage: error,
+                    }};
+                }
 
-    const listTimeframes = {
-        '10m': 10,
-        '30m': 30,
-        '1h': 60,
-        '2h': 120,
-        '4h': 240,
-        '1d': 1440,
-    };
-
-    const timeframe = Object.keys(listTimeframes).includes(req.query.timeframe) ? listTimeframes[req.query.timeframe] : 
-        (Object.values(listTimeframes).map(e => e.toString()).includes(req.query.timeframe) ? req.query.timeframe : 30);
-
-    const candles = Math.max(Math.min(req.query.candles || 1000, 1000), 1);
-    const offset = (parseInt(req.query.page) - 1) * candles || 0;
-    const speeds = ['instant', 'fast', 'standard', 'slow'];
-
-    const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
-    
-    const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${req.query.from || 0}' AND '${req.query.to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
-
-    if (error){
-        res.status(500);
-        res.send({
-            status: 500,
-            error: 'Internal Server Error',
-            message: 'Error while retrieving price history information from database.',
-            serverMessage: error,
-        });
+                const fields = ['open', 'close', 'low', 'high'];
+        
+                return rows.map(row => {
+                    const tempRow = Object.fromEntries(speeds.map(speed => 
+                        [speed, Object.fromEntries(fields.map(field => 
+                            [field, row[`${speed}.${field}`]]
+                        ))]
+                    ));
+                    tempRow.timestamp = row.timestamp;
+                    tempRow.samples = row.samples;
+                    return tempRow;
+                });
+            }
+        }
+    });
+    if (resp.error){
+        res.status(resp.error.status || 500);
+        res.send(resp.error);
+        return;
     }
-    else {
-        const fields = ['open', 'close', 'low', 'high'];
 
-        res.send(rows.map(row => {
-            const tempRow = Object.fromEntries(speeds.map(speed => 
-                [speed, Object.fromEntries(fields.map(field => 
-                    [field, row[`${speed}.${field}`]]
-                ))]
-            ));
-            tempRow.timestamp = row.timestamp;
-            tempRow.samples = row.samples;
-            return tempRow;
-        }));
-    }
+    res.send(resp);
 });
 
 
@@ -962,5 +928,81 @@ const api = {
         }
 
         return true;    
-    }
+    },
+
+    automate: async function({ key, origin, ip, endpoint, action }) {
+        let resp = {};
+        const sqlData = {};
+        const usage = { ip: 0, apiKey: 0 };
+        let credit = 0;
+    
+        if (key){
+            const keyRow = await this.getKeyInfo(key);
+            if (keyRow.error){
+                return { error: keyRow.error };
+            }
+
+            resp = this.validateOrigin(keyRow.origin, origin);
+            if (resp.error) {
+                return { error: resp.error };
+            }
+    
+            sqlData.apiKey = keyRow.result.id;
+            credit = keyRow.result.credit;
+        }
+    
+        const usageCheck = await this.getUsage(sqlData.apiKey, ip);
+        if (usageCheck.error){
+            return { error: usageCheck.error };
+        }
+        else if (usageCheck.usage) {
+            Object.entries(usageCheck.usage).forEach((k,v) => usage[k] = v);
+        }
+    
+        resp = this.authorizeKey(key, usage, credit);
+        if (resp.error){
+            return { error: resp.error };
+        }
+
+        const actionResp = action.run(action.data);
+        if (actionResp.error){
+            return { error: actionResp.error };
+        }
+
+        resp = await this.reduceCredit(sqlData.apiKey, usage, credit);
+        if (resp.error){
+            return { error: resp.error };
+        }
+
+        sqlData.endpoint = endpoint;
+
+        if (ip){
+            sqlData.ip = ip;
+        }
+        if (origin){
+            sqlData.origin = oringin;
+        }
+    
+        resp = await this.recordRequest(sqlData);
+        if (resp.error){
+            return { error: resp.error };
+        }
+
+        return actionResp;
+    },
+
+    recordRequest: async function(data) {
+        // save API request to DB for statistics purpose
+        const [rows, error] = await db.insert('api_requests', data);
+        if (error){
+            return { error: {
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while trying to record api request into the database.',
+                serverMessage: error,
+            }};
+        }
+
+        return rows;
+    },
 }
