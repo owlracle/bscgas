@@ -39,8 +39,35 @@ const corsOptions = {
 };
 
 
+// manage session tokens
+const session = {
+    timeLimit: 1000 * 60, // 1 minute
+    clients: {},
+
+    create: function(){
+        const sid = uuidv4().split('-').join('');
+        this.refresh(sid);
+        return sid;
+    },
+
+    refresh: function(sid) {
+        clearTimeout(this.clients[sid]);
+        this.clients[sid] = setTimeout(() => delete this.clients[sid], this.timeLimit);
+    },
+
+    exists: function(sid){
+        return this.clients[sid] ? true : false;
+    }
+};
+
+
 app.get('/', (req, res) => {
-    res.render(`index`, {});
+    res.render(`index`, {
+        sessionid: session.create(),
+        usagelimit: USAGE_LIMIT,
+        requestcost: REQUEST_COST,
+        recaptchakey: configFile.recaptcha[configFile.production ? 'prod' : 'dev'].key,
+    });
 });
 
 app.use(express.static(__dirname + '/public/'));
@@ -51,21 +78,6 @@ app.listen(port, () => {
 
 
 // --- ROUTES ---
-
-// helper endpoint to discover api limits
-app.get('/limits', async (req, res) => {
-    res.send({
-        USAGE_LIMIT: USAGE_LIMIT,
-        REQUEST_COST: REQUEST_COST,
-    });
-});
-
-
-// get client recaptcha api key
-app.get('/recapchakey', async (req, res) => {
-    const mode = configFile.production ? 'prod' : 'dev';
-    res.send({key: configFile.recaptcha[mode].key});
-});
 
 
 // discover gas prices right now
@@ -93,7 +105,19 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
     }
 
     // request google recaptcha
-    if (req.query.grc) {
+    if (req.query.grc && req.query.sid) {
+        const sid = req.query.sid;
+        if (!session.exists(sid)){
+            res.status(401);
+            res.send({
+                status: 401,
+                error: 'Unauthorized',
+                message: 'Session token invalid.',
+            });
+            return;
+        }
+        session.refresh(sid);
+
         const rc = await verifyRecaptcha(req.query.grc);
         
         if (rc.success && rc.score >= 0.1){
@@ -183,7 +207,19 @@ app.get('/history', cors(corsOptions), async (req, res) => {
         });
     };
 
-    if (req.query.grc) {
+    if (req.query.grc && req.query.sid) {
+        const sid = req.query.sid;
+        if (!session.exists(sid)){
+            res.status(401);
+            res.send({
+                status: 401,
+                error: 'Unauthorized',
+                message: 'Session token invalid.',
+            });
+            return;
+        }
+        session.refresh(sid);
+
         const rc = await verifyRecaptcha(req.query.grc);
 
         if (rc.success && rc.score >= 0.1){

@@ -14,7 +14,7 @@ const recaptcha = {
 
         this.loading = true;
 
-        this.key = (await (await fetch('/recapchakey')).json()).key;
+        this.key = document.querySelector('#recaptchakey').value;
 
         const script = document.createElement('script');
         script.src = `https://www.google.com/recaptcha/api.js?render=${this.key}`;
@@ -269,7 +269,7 @@ const chart = {
         this.timeframe = timeframe;
         // TODO: must resolve lack of apikey
         const token = await recaptcha.getToken();
-        this.history = await (await fetch(`/history?grc=${token}&timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
+        this.history = await (await fetch(`/history?grc=${token}&sid=${session}&timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
         if (this.history.error){
             console.log(this.history);
 
@@ -637,7 +637,7 @@ const gasTimer = {
     update: async function() {
         const token = await recaptcha.getToken();
         const startTime = new Date();
-        const data = await (await fetch(`/gas?grc=${token}`)).json();
+        const data = await (await fetch(`/gas?grc=${token}&sid=${session}`)).json();
         const requestTime = new Date() - startTime;
 
         if (data.error){
@@ -1280,7 +1280,10 @@ const api = {
 };
 document.querySelector('#manage-apikey').addEventListener('click', () => api.showModal());
 
-const limits = await api.getLimits();
+const limits = {
+    REQUEST_COST: document.querySelector('#requestcost').value,
+    USAGE_LIMIT: document.querySelector('#usagelimit').value,
+};
 document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.USAGE_LIMIT);
 document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
 document.querySelector('#credit-bnb').innerHTML = `$${((await price.get()).now * 0.00000001).toFixed(10)}`;
@@ -1510,3 +1513,8 @@ new UrlBox(document.querySelector('#url-logs.url'), {
         now: (new Date().getTime() / 1000).toFixed(0)
     }
 });
+
+
+// set session
+const session = document.querySelector('#sessionid').value;
+document.querySelectorAll('.template-var').forEach(e => e.remove());
