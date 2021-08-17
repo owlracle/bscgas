@@ -1,3 +1,41 @@
+// request google recaptcha v3 token
+
+const recaptcha = {
+    ready: false,
+    loading: false,
+
+    load: async function() {
+        if (this.ready){
+            return true;
+        }
+        else if (this.loading){
+            return new Promise(resolve => setTimeout(() => resolve(this.load()), 10));
+        }
+
+        this.loading = true;
+
+        this.key = (await (await fetch('/recapchakey')).json()).key;
+
+        const script = document.createElement('script');
+        script.src = `https://www.google.com/recaptcha/api.js?render=${this.key}`;
+        script.async = true;
+
+        document.body.appendChild(script);
+
+        return new Promise( resolve => script.onload = () => {
+            this.ready = true;
+            resolve(true);
+        });
+    },
+
+    getToken: async function() {
+        await this.load();
+        return new Promise(resolve => grecaptcha.ready(() => grecaptcha.execute(this.key, { action: 'submit' }).then(token => resolve(token))));
+    }
+}
+recaptcha.load();
+
+
 // set the cookie utils object
 
 const cookies = {
@@ -164,24 +202,26 @@ const chart = {
 
     update: function(data) {
         // console.log(data);
-        Object.entries(this.series).forEach(([key, value]) => {
-            const speedData = data.map(e => { return { 
-                value: e[key].high,
-                time: parseInt(new Date(e.timestamp).getTime() / 1000),
-            }}).reverse();
-    
-            // [{ time: '2018-10-19', open: 180.34, high: 180.99, low: 178.57, close: 179.85 },]
-            if (!value.series){
-                value.series = this.obj.addAreaSeries({
-                    lineColor: value.color,
-                    topColor: value.color,
-                    bottomColor: `${value.color}30`,
-                    lineWidth: 2,
-                    visible: false,
-                });
-            }
-            value.series.setData(speedData);
-        });
+        if (data.length){
+            Object.entries(this.series).forEach(([key, value]) => {
+                const speedData = data.map(e => { return { 
+                    value: e[key].high,
+                    time: parseInt(new Date(e.timestamp).getTime() / 1000),
+                }}).reverse();
+        
+                // [{ time: '2018-10-19', open: 180.34, high: 180.99, low: 178.57, close: 179.85 },]
+                if (!value.series){
+                    value.series = this.obj.addAreaSeries({
+                        lineColor: value.color,
+                        topColor: value.color,
+                        bottomColor: `${value.color}30`,
+                        lineWidth: 2,
+                        visible: false,
+                    });
+                }
+                value.series.setData(speedData);
+            });
+        }
     },
 
     setTheme: function(name) {
@@ -214,9 +254,14 @@ const chart = {
     getHistory: async function(timeframe=60, page=1, candles=this.candles) {
         this.timeframe = timeframe;
         // TODO: must resolve lack of apikey
-        this.history = await (await fetch(`/history?grc=aaa&timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
+        const token = await recaptcha.getToken();
+        this.history = await (await fetch(`/history?grc=${token}&timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
         if (this.history.error){
             console.log(this.history);
+
+            if (this.history.error.status == 401){
+                return this.getHistory(timeframe, page, candles);
+            }
             return [];
         }
         return this.history;
@@ -226,10 +271,6 @@ const chart = {
         return this.ready || new Promise(resolve => setTimeout(() => resolve(this.isReady()), 10));
     }
 };
-chart.init().then(() => {
-    document.querySelector(`#timeframe-switcher #tf-60`).click();
-    document.querySelector(`#toggle-container #standard`).click();
-});
 
 
 // change theme dark/light
@@ -548,44 +589,6 @@ document.querySelectorAll('.gas i').forEach((e,i) => {
 });
 
 
-// request google recaptcha v3 token
-
-const recaptcha = {
-    ready: false,
-    loading: false,
-
-    load: async function() {
-        if (this.ready){
-            return true;
-        }
-        else if (this.loading){
-            return new Promise(resolve => setTimeout(() => resolve(this.load()), 10));
-        }
-
-        this.loading = true;
-
-        this.key = (await (await fetch('/recapchakey')).json()).key;
-
-        const script = document.createElement('script');
-        script.src = `https://www.google.com/recaptcha/api.js?render=${this.key}`;
-        script.async = true;
-
-        document.body.appendChild(script);
-
-        return new Promise( resolve => script.onload = () => {
-            this.ready = true;
-            resolve(true);
-        });
-    },
-
-    getToken: async function() {
-        await this.load();
-        return new Promise(resolve => grecaptcha.ready(() => grecaptcha.execute(this.key, { action: 'submit' }).then(token => resolve(token))));
-    }
-}
-recaptcha.load();
-
-
 // update gas prices every 10s
 
 const gasTimer = {
@@ -625,8 +628,12 @@ const gasTimer = {
 
         if (data.error){
             console.log(data);
+            if (data.error.status == 401){
+                return this.update();
+            }
         }
         else{
+            // console.log(data)
             this.onUpdate(data, requestTime);
         }
         return data;    
@@ -659,8 +666,12 @@ gasTimer.onUpdate = function(data, requestTime){
         
         sample.innerHTML = formatted;
         sample.classList.add('loaded');
-    }
 
+        chart.init().then(() => {
+            document.querySelector(`#timeframe-switcher #tf-60`).click();
+            document.querySelector(`#toggle-container #standard`).click();
+        });        
+    }
 }
 
 

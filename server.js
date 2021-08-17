@@ -58,41 +58,44 @@ app.get('/limits', async (req, res) => {
 
 // get client recaptcha api key
 app.get('/recapchakey', async (req, res) => {
-    res.send({key: configFile.recaptcha.key});
+    const mode = configFile.production ? 'prod' : 'dev';
+    res.send({key: configFile.recaptcha[mode].key});
 });
 
 
 // discover gas prices right now
 app.get('/gas', cors(corsOptions), async (req, res) => {
-    // request google recaptcha
-    if (req.query.grc) {
-        let data = requestOracle();
-        const rc = await verifyRecaptcha(req.query.grc);
+    const dataRun = async () => {
+        const resp = {};
 
-        if (rc.success && rc.score >= 0.1){
-            const resp = {};
+        const data = await requestOracle();
+        if (data.error){
+            return { error: data.error };
+        }
     
-            data = await data;
-            if (data.error){
-                return { error: data.error };
-            }
-        
-            resp.timestamp = new Date().toISOString();
-            // resp.score = rc.score;
-        
-            if (data.standard){
-                resp.slow = data.safeLow;
-                resp.standard = data.standard;
-                resp.fast = data.fast;
-                resp.instant = data.fastest;
-                resp.block_time = data.block_time;
-                resp.last_block = data.blockNum;
-            }
-            
-            res.send(resp);
-            return;
+        resp.timestamp = new Date().toISOString();
+    
+        if (data.standard){
+            resp.slow = data.safeLow;
+            resp.standard = data.standard;
+            resp.fast = data.fast;
+            resp.instant = data.fastest;
+            resp.block_time = data.block_time;
+            resp.last_block = data.blockNum;
         }
 
+        return resp;
+    }
+
+    // request google recaptcha
+    if (req.query.grc) {
+        const rc = await verifyRecaptcha(req.query.grc);
+        
+        if (rc.success && rc.score >= 0.1){
+            const data = await dataRun();
+            res.send(data);
+            return;
+        }
         res.status(401);
         res.send({
             status: 401,
@@ -110,31 +113,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
         endpoint: 'gas',
         action: {
             data: {},
-            run: async () => {
-                const resp = {};
-    
-                const data = await requestOracle();
-                if (data.error){
-                    return { error: data.error };
-                }
-            
-                resp.timestamp = new Date().toISOString();
-            
-                if (data.standard){
-                    resp.slow = data.safeLow;
-                    resp.standard = data.standard;
-                    resp.fast = data.fast;
-                    resp.instant = data.fastest;
-                    resp.block_time = data.block_time;
-                    resp.last_block = data.blockNum;
-                }
-
-                if (!req.query.apikey){
-                    resp.warning = "Requests not using an api key will soon be disabled. Generate a new key on bscgas.info."
-                }
-                
-                return resp;
-            }
+            run: dataRun,
         }
     });
     if (resp.error){
@@ -149,6 +128,81 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
 
 // price history
 app.get('/history', cors(corsOptions), async (req, res) => {
+    const timeframe = req.query.timeframe;
+    const candles = req.query.candles;
+    const page = req.query.page;
+    const from = req.query.from;
+    const to = req.query.to;
+
+    const dataRun = async ({ timeframe, candles, page, from, to }) => {
+        const listTimeframes = {
+            '10m': 10,
+            '30m': 30,
+            '1h': 60,
+            '2h': 120,
+            '4h': 240,
+            '1d': 1440,
+        };
+    
+        timeframe = Object.keys(listTimeframes).includes(timeframe) ? listTimeframes[timeframe] : 
+            (Object.values(listTimeframes).map(e => e.toString()).includes(timeframe) ? timeframe : 30);
+    
+        candles = Math.max(Math.min(candles || 1000, 1000), 1);
+        const offset = (parseInt(page) - 1) * candles || 0;
+        const speeds = ['instant', 'fast', 'standard', 'slow'];
+    
+        const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
+        
+        const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${from || 0}' AND '${to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
+    
+        if (error){
+            return { error: {
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error while retrieving price history information from database.',
+                serverMessage: error,
+            }};
+        }
+
+        const fields = ['open', 'close', 'low', 'high'];
+
+        return rows.map(row => {
+            const tempRow = Object.fromEntries(speeds.map(speed => 
+                [speed, Object.fromEntries(fields.map(field => 
+                    [field, row[`${speed}.${field}`]]
+                ))]
+            ));
+            tempRow.timestamp = row.timestamp;
+            tempRow.samples = row.samples;
+            return tempRow;
+        });
+    };
+
+    if (req.query.grc) {
+        const rc = await verifyRecaptcha(req.query.grc);
+
+        if (rc.success && rc.score >= 0.1){
+            const data = await dataRun({
+                timeframe: timeframe,
+                candles: candles,
+                page: page,
+                from: from,
+                to: to,
+            });
+
+            res.send(data);
+            return;
+        }
+        res.status(401);
+        res.send({
+            status: 401,
+            error: 'Unauthorized',
+            message: 'Failed to verify recaptcha.',
+            serverMessage: rc
+        });
+        return;
+    }
+
     let resp = await api.automate({
         key: req.query.apikey,
         origin: req.header('Origin'),
@@ -156,55 +210,13 @@ app.get('/history', cors(corsOptions), async (req, res) => {
         endpoint: 'history',
         action: {
             data: {
-                timeframe: req.query.timeframe,
-                candles: req.query.candles,
-                page: req.query.page,
-                from: req.query.from,
-                to: req.query.to,
+                timeframe: timeframe,
+                candles: candles,
+                page: page,
+                from: from,
+                to: to,
             },
-            run: async ({ timeframe, candles, page, from, to }) => {
-                const listTimeframes = {
-                    '10m': 10,
-                    '30m': 30,
-                    '1h': 60,
-                    '2h': 120,
-                    '4h': 240,
-                    '1d': 1440,
-                };
-            
-                timeframe = Object.keys(listTimeframes).includes(timeframe) ? listTimeframes[timeframe] : 
-                    (Object.values(listTimeframes).map(e => e.toString()).includes(timeframe) ? timeframe : 30);
-            
-                candles = Math.max(Math.min(candles || 1000, 1000), 1);
-                const offset = (parseInt(page) - 1) * candles || 0;
-                const speeds = ['instant', 'fast', 'standard', 'slow'];
-            
-                const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
-                
-                const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${from || 0}' AND '${to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
-            
-                if (error){
-                    return { error: {
-                        status: 500,
-                        error: 'Internal Server Error',
-                        message: 'Error while retrieving price history information from database.',
-                        serverMessage: error,
-                    }};
-                }
-
-                const fields = ['open', 'close', 'low', 'high'];
-        
-                return rows.map(row => {
-                    const tempRow = Object.fromEntries(speeds.map(speed => 
-                        [speed, Object.fromEntries(fields.map(field => 
-                            [field, row[`${speed}.${field}`]]
-                        ))]
-                    ));
-                    tempRow.timestamp = row.timestamp;
-                    tempRow.samples = row.samples;
-                    return tempRow;
-                });
-            }
+            run: dataRun
         }
     });
     if (resp.error){
@@ -795,20 +807,6 @@ const bscscan = {
 };
 
 
-(async function cacheGas(){
-    try{
-        const data = await requestOracle();
-        fs.writeFileSync(`${__dirname}/cached_gas.json`, JSON.stringify(data));
-    }
-    catch (error) {
-        console.log(error);
-    }
-    finally {
-        setTimeout(() => cacheGas(), 1000 * 30); // 30 secs
-    }
-})();
-
-
 const api = {
     getUsage: async function(keyId, ip) {
         const usage = { ip: 0, apiKey: 0 };
@@ -1024,10 +1022,19 @@ const api = {
 }
 
 async function verifyRecaptcha(token){
-    const secret = configFile.recaptcha.secret;
-    return await (await fetch('https://www.google.com/recaptcha/api/siteverify', {
-        method: 'POST',
-        body: `secret=${secret}&response=${token}`,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    })).json();
+    const mode = configFile.production ? 'prod' : 'dev';
+    const secret = configFile.recaptcha[mode].secret;
+
+    try {
+        const data = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+            method: 'POST',
+            body: `secret=${secret}&response=${token}`,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        return await data.json();
+    }
+    catch(error){
+        console.log(error);
+        return error;
+    }
 }

@@ -8,7 +8,13 @@
     },
     "production": true,
     "recaptcha": {
-        "key": "RECAPTCHA_KEY",
-        "secret": "RECAPTCHA_SECRET"
+        "dev": {
+            "key": "DEV_RECAPTCHA_KEY",
+            "secret": "DEV_RECAPTCHA_SECRET"
+        },
+        "prod": {
+            "key": "PROD_RECAPTCHA_KEY",
+            "secret": "PROD_RECAPTCHA_SECRET"
+        }
     }
 }
