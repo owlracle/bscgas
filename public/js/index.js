@@ -20,7 +20,7 @@ const recaptcha = {
         script.src = `https://www.google.com/recaptcha/api.js?render=${this.key}`;
         script.async = true;
 
-        document.body.appendChild(script);
+        document.head.appendChild(script);
 
         return new Promise( resolve => script.onload = () => {
             this.ready = true;
@@ -34,6 +34,20 @@ const recaptcha = {
     }
 }
 recaptcha.load();
+
+
+// load a custom script on window object
+class DynamicScript {
+    constructor(url) {
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+
+        document.head.appendChild(script);
+        script.onLoad = this.onLoad;
+    }
+}
+new DynamicScript('https://kit.fontawesome.com/c1a16f97ec.js');
 
 
 // set the cookie utils object
@@ -805,6 +819,7 @@ const api = {
                 this.setAttribute('disabled', true);
                 this.innerHTML = '<i class="fas fa-spin fa-cog"></i>';
     
+                body.grc = await recaptcha.getToken();
                 const data = await api.createKey(body);
                 api.showWindowCreate(data);
             }
@@ -1004,6 +1019,8 @@ const api = {
                 <p>${data.message}</p>
                 <div id="button-container"><button id="close">OK</button></div>
             </div>`;
+
+            modal.querySelector('#close').addEventListener('click', () => document.querySelector('#fog').click());
         }
     },
 

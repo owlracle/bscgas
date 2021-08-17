@@ -5,6 +5,7 @@ const mysql = require('mysql2');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
+const mustacheExpress = require('mustache-express');
 
 const configFile = JSON.parse(fs.readFileSync(`${__dirname}/config.json`));
 
@@ -14,6 +15,10 @@ let saveDB = true;
 
 const USAGE_LIMIT = 100;
 const REQUEST_COST = 10;
+
+app.engine('html', mustacheExpress());
+app.set('view engine', 'html');
+app.set('views', __dirname + '/views');
 
 // receive args
 process.argv.forEach((val, index, array) => {
@@ -35,7 +40,7 @@ const corsOptions = {
 
 
 app.get('/', (req, res) => {
-    res.sendFile(`${__dirname}/public/html/index.html`);
+    res.render(`index`, {});
 });
 
 app.use(express.static(__dirname + '/public/'));
@@ -231,6 +236,28 @@ app.get('/history', cors(corsOptions), async (req, res) => {
 
 // generate new api key
 app.post('/keys', async (req, res) => {
+    if (!req.body.grc) {
+        res.status(401);
+        res.send({
+            status: 401,
+            error: 'Unauthorized',
+            message: 'Your request did not send all the required fields.',
+        });
+        return;
+    }
+
+    const rc = await verifyRecaptcha(req.body.grc);
+    if (!rc.success || rc.score < 0.1){
+        res.status(401);
+        res.send({
+            status: 401,
+            error: 'Unauthorized',
+            message: 'Failed to verify recaptcha.',
+            serverMessage: rc
+        });
+        return;
+    }
+
     const key = uuidv4().split('-').join('');
     const secret = uuidv4().split('-').join('');
 
@@ -994,7 +1021,7 @@ const api = {
             sqlData.ip = ip;
         }
         if (origin){
-            sqlData.origin = oringin;
+            sqlData.origin = origin;
         }
     
         resp = await this.recordRequest(sqlData);
