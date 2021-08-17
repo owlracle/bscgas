@@ -50,7 +50,7 @@ const chart = {
     timeframe: 60,
     page: 1,
     candles: 1000,
-    lastCandle: new Date().getTime() / 1000,
+    lastCandle: (new Date().getTime() / 1000).toFixed(0),
     allRead: false,
 
     init: async function() {
@@ -213,7 +213,12 @@ const chart = {
 
     getHistory: async function(timeframe=60, page=1, candles=this.candles) {
         this.timeframe = timeframe;
-        this.history = await (await fetch(`/history?timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
+        // TODO: must resolve lack of apikey
+        this.history = await (await fetch(`/history?grc=aaa&timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
+        if (this.history.error){
+            console.log(this.history);
+            return [];
+        }
         return this.history;
     },
 
@@ -542,18 +547,57 @@ document.querySelectorAll('.gas i').forEach((e,i) => {
     new Tooltip(e, tooltipList[i]);
 });
 
+
+// request google recaptcha v3 token
+
+const recaptcha = {
+    ready: false,
+    loading: false,
+
+    load: async function() {
+        if (this.ready){
+            return true;
+        }
+        else if (this.loading){
+            return new Promise(resolve => setTimeout(() => resolve(this.load()), 10));
+        }
+
+        this.loading = true;
+
+        this.key = (await (await fetch('/recapchakey')).json()).key;
+
+        const script = document.createElement('script');
+        script.src = `https://www.google.com/recaptcha/api.js?render=${this.key}`;
+        script.async = true;
+
+        document.body.appendChild(script);
+
+        return new Promise( resolve => script.onload = () => {
+            this.ready = true;
+            resolve(true);
+        });
+    },
+
+    getToken: async function() {
+        await this.load();
+        return new Promise(resolve => grecaptcha.ready(() => grecaptcha.execute(this.key, { action: 'submit' }).then(token => resolve(token))));
+    }
+}
+recaptcha.load();
+
+
 // update gas prices every 10s
 
 const gasTimer = {
-    interval: 10000,
-    toInterval: 100,
+    interval: 10000, // interval between every request
+    toInterval: 100, // interval between timer updates
     counter: 100,
     element: document.querySelector('#countdown #filled'),
 
     init: function(interval, toInterval){
         this.interval = interval;
         this.toInterval = toInterval;
-        this.counter = interval / toInterval;
+        this.counter = 1;
 
         this.countDown();
     },
@@ -574,36 +618,36 @@ const gasTimer = {
     },
 
     update: async function() {
+        const token = await recaptcha.getToken();
         const startTime = new Date();
-        // --- NOTICE ---.
-        // This endpoint returns a cached information retieved from oracle every 30 seconds.
-        // There is no point in making your app consume this endpoint as a way to overcome the api limits. You will be getting "old" data.
-        // Instead, use your own api key every 30-60 seconds, cache the response in your server, then deliver to your users when they request your server. Check the api request limits and you will be able to keep using this service for free.
-        // Check the docs for more info.
-        const data = await (await fetch('/gascached')).json();
+        const data = await (await fetch(`/gas?grc=${token}`)).json();
         const requestTime = new Date() - startTime;
 
-        const speedList = ['slow', 'standard', 'fast', 'instant'];
         if (data.error){
-            console.log(data.error);
+            console.log(data);
         }
         else{
-            document.querySelectorAll('.gas .body').forEach((e,i) => {
-                if (data[speedList[i]]){
-                    e.querySelector('.gwei').innerHTML = `${data[speedList[i]]} GWei`;
-                    // e.querySelector('.usd').innerHTML = `$${data[speedList[i]] * 0.000000001}`;
-                }
-            });
-
-            setColorGradient(document.querySelector('#time-sign'), requestTime);
+            this.onUpdate(data, requestTime);
         }
         return data;    
     }
 };
 gasTimer.init(30000, 100);
 
-gasTimer.update().then(data => {
-    const formatted = `{
+gasTimer.onUpdate = function(data, requestTime){
+    const speedList = ['slow', 'standard', 'fast', 'instant'];
+    document.querySelectorAll('.gas .body').forEach((e,i) => {
+        if (data[speedList[i]]){
+            e.querySelector('.gwei').innerHTML = `${data[speedList[i]]} GWei`;
+            // e.querySelector('.usd').innerHTML = `$${data[speedList[i]] * 0.000000001}`;
+        }
+    });
+
+    setColorGradient(document.querySelector('#time-sign'), requestTime);
+
+    const sample = document.querySelector('#sample');
+    if (!sample.classList.contains('loaded')){        
+        const formatted = `{
     <span class="json key">"timestamp"</span>: <span class="json string">"${data.timestamp || ''}"</span>,
     <span class="json key">"slow"</span>: <span class="json number">${data.slow || 0}</span>,
     <span class="json key">"standard"</span>: <span class="json number">${data.standard || 0}</span>,
@@ -612,9 +656,13 @@ gasTimer.update().then(data => {
     <span class="json key">"block_time"</span>: <span class="json number">${data.block_time || 0}</span>
     <span class="json key">"last_block"</span>: <span class="json number">${data.last_block || 0}</span>
 }`;
+        
+        sample.innerHTML = formatted;
+        sample.classList.add('loaded');
+    }
 
-    document.querySelector('#sample').innerHTML = formatted;
-});
+}
+
 
 const tooltipColor = new Tooltip(document.querySelector('#time-sign'), '', { createEvent: 'mouseenter' });
 
@@ -1216,19 +1264,21 @@ const dynamicSamples = {
         },
 
         update: function(data){
-            const container = document.querySelector('#history-sample-container');
-            const content = Object.entries(data[0]).map(([key, value]) => {
-                if (key == 'timestamp' || key == 'samples'){
-                    value = `<span class="json ${typeof value}">${typeof value == 'number' ? value : `"${value}"`}</span>`;
-                }
-                else {
-                    value = Object.entries(value).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json ${typeof value}">${typeof value == 'number' ? value : `"${value}"`}</span>`).join(',\n            ');
-                    value = `{\n            ${value}\n        }`;
-                }
-
-                return `<span class="json key">"${key}"</span>: ${value}`
-            }).join(',\n        ');
-            container.innerHTML = `<pre class="code"><code>[\n    {\n        ${content}\n    },\n\n    ...\n]</code></pre>`;
+            if (data.length){
+                const container = document.querySelector('#history-sample-container');
+                const content = Object.entries(data[0]).map(([key, value]) => {
+                    if (key == 'timestamp' || key == 'samples'){
+                        value = `<span class="json ${typeof value}">${typeof value == 'number' ? value : `"${value}"`}</span>`;
+                    }
+                    else {
+                        value = Object.entries(value).map(([key, value]) => `<span class="json key">"${key}"</span>: <span class="json ${typeof value}">${typeof value == 'number' ? value : `"${value}"`}</span>`).join(',\n            ');
+                        value = `{\n            ${value}\n        }`;
+                    }
+    
+                    return `<span class="json key">"${key}"</span>: ${value}`
+                }).join(',\n        ');
+                container.innerHTML = `<pre class="code"><code>[\n    {\n        ${content}\n    },\n\n    ...\n]</code></pre>`;
+            }
         }
     },
 

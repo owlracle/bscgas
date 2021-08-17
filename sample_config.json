@@ -6,5 +6,9 @@
         "database": "DATABASE",
         "password": "PASSWORD"
     },
-    "production": true
+    "production": true,
+    "recaptcha": {
+        "key": "RECAPTCHA_KEY",
+        "secret": "RECAPTCHA_SECRET"
+    }
 }

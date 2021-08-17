@@ -56,9 +56,54 @@ app.get('/limits', async (req, res) => {
 });
 
 
+// get client recaptcha api key
+app.get('/recapchakey', async (req, res) => {
+    res.send({key: configFile.recaptcha.key});
+});
+
+
 // discover gas prices right now
 app.get('/gas', cors(corsOptions), async (req, res) => {
-    let resp = await api.automate({
+    // request google recaptcha
+    if (req.query.grc) {
+        let data = requestOracle();
+        const rc = await verifyRecaptcha(req.query.grc);
+
+        if (rc.success && rc.score >= 0.1){
+            const resp = {};
+    
+            data = await data;
+            if (data.error){
+                return { error: data.error };
+            }
+        
+            resp.timestamp = new Date().toISOString();
+            // resp.score = rc.score;
+        
+            if (data.standard){
+                resp.slow = data.safeLow;
+                resp.standard = data.standard;
+                resp.fast = data.fast;
+                resp.instant = data.fastest;
+                resp.block_time = data.block_time;
+                resp.last_block = data.blockNum;
+            }
+            
+            res.send(resp);
+            return;
+        }
+
+        res.status(401);
+        res.send({
+            status: 401,
+            error: 'Unauthorized',
+            message: 'Failed to verify recaptcha.',
+            serverMessage: rc
+        });
+        return;
+    }
+
+    const resp = await api.automate({
         key: req.query.apikey,
         origin: req.header('Origin'),
         ip: req.header('x-real-ip'),
@@ -83,6 +128,10 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
                     resp.block_time = data.block_time;
                     resp.last_block = data.blockNum;
                 }
+
+                if (!req.query.apikey){
+                    resp.warning = "Requests not using an api key will soon be disabled. Generate a new key on bscgas.info."
+                }
                 
                 return resp;
             }
@@ -95,13 +144,6 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
     }
 
     res.send(resp);
-});
-
-
-// get gas cached. useful for website frontend
-app.get('/gascached', async (req, res) => {
-    const cache = JSON.parse(fs.readFileSync(`${__dirname}/cached_gas.json`));
-    res.send(cache);
 });
 
 
@@ -753,25 +795,10 @@ const bscscan = {
 };
 
 
-async function cacheGas(){
+(async function cacheGas(){
     try{
         const data = await requestOracle();
-
-        if (data.standard){
-            const resp = {};
-            resp.timestamp = new Date().toISOString();
-            resp.slow = data.safeLow;
-            resp.standard = data.standard;
-            resp.fast = data.fast;
-            resp.instant = data.fastest;
-            resp.block_time = data.block_time;
-            resp.last_block = data.blockNum;
-
-            fs.writeFileSync(`${__dirname}/cached_gas.json`, JSON.stringify(resp));
-        }
-        else {
-            throw new Error('Could not get information from oracle.');
-        }
+        fs.writeFileSync(`${__dirname}/cached_gas.json`, JSON.stringify(data));
     }
     catch (error) {
         console.log(error);
@@ -779,13 +806,12 @@ async function cacheGas(){
     finally {
         setTimeout(() => cacheGas(), 1000 * 30); // 30 secs
     }
-}
-cacheGas();
+})();
 
 
 const api = {
     getUsage: async function(keyId, ip) {
-        const usage = {};
+        const usage = { ip: 0, apiKey: 0 };
 
         if (ip) {
             // get usage from ip
@@ -885,15 +911,9 @@ const api = {
         return true;
     },
 
-    authorizeKey: function(key, usage, credit){
-        if (!usage.ip && !key){
-            return { error: {
-                status: 403,
-                error: 'Forbidden',
-                message: 'You must get behind a public ip address or use an API key.'
-            }};
-        }
-        else if (!key && usage.ip >= USAGE_LIMIT){
+    authorizeKey: function(key, ip, usage, credit){
+        // TODO: block !key requests in the future
+        if (!key && usage.ip >= USAGE_LIMIT){
             return { error: {
                 status: 403,
                 error: 'Forbidden',
@@ -933,7 +953,6 @@ const api = {
     automate: async function({ key, origin, ip, endpoint, action }) {
         let resp = {};
         const sqlData = {};
-        const usage = { ip: 0, apiKey: 0 };
         let credit = 0;
     
         if (key){
@@ -951,15 +970,12 @@ const api = {
             credit = keyRow.result.credit;
         }
     
-        const usageCheck = await this.getUsage(sqlData.apiKey, ip);
-        if (usageCheck.error){
-            return { error: usageCheck.error };
-        }
-        else if (usageCheck.usage) {
-            Object.entries(usageCheck.usage).forEach((k,v) => usage[k] = v);
+        const usage = await this.getUsage(sqlData.apiKey, ip);
+        if (usage.error){
+            return { error: usage.error };
         }
     
-        resp = this.authorizeKey(key, usage, credit);
+        resp = this.authorizeKey(key, ip, usage, credit);
         if (resp.error){
             return { error: resp.error };
         }
@@ -1005,4 +1021,13 @@ const api = {
 
         return rows;
     },
+}
+
+async function verifyRecaptcha(token){
+    const secret = configFile.recaptcha.secret;
+    return await (await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        body: `secret=${secret}&response=${token}`,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })).json();
 }
