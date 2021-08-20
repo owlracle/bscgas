@@ -108,6 +108,7 @@ const chart = {
     init: async function() {
         await this.package;
 
+        document.querySelector('#chart').innerHTML = '';
         this.obj = LightweightCharts.createChart(document.querySelector('#chart'), {
             width: Math.min(document.querySelector('#frame').offsetWidth - 20, 600),
             height: 300,
@@ -628,7 +629,7 @@ const gasTimer = {
                 this.counter = this.interval / this.toInterval;
                 this.update().then(() => this.countDown());
             }
-            else {
+            else if (!this.stop) {
                 this.countDown();
             }
         }, this.toInterval);
@@ -642,8 +643,22 @@ const gasTimer = {
 
         if (data.error){
             console.log(data);
-            if (data.error.status == 401){
-                return this.update();
+            if (data.status == 401){
+                this.stop = true;
+                const fog = document.createElement('div');
+                fog.id = 'fog';
+                fog.innerHTML = `<div id="api-window"><div id="content">
+                    <h2>Session expired</h2>
+                    <p>This page must be reloaded to keep showing updated gas prices</p>
+                    <div id="button-container">
+                        <button id="reload">Reload</button>
+                        <button id="cancel">Cancel</button>
+                    </div>
+                </div></div>`;
+                document.body.appendChild(fog);
+                fog.addEventListener('click', () => fog.remove());
+                fog.querySelector('#cancel').addEventListener('click', () => fog.remove());
+                fog.querySelector('#reload').addEventListener('click', () => window.location.reload());
             }
         }
         else{
@@ -1518,3 +1533,18 @@ new UrlBox(document.querySelector('#url-logs.url'), {
 // set session
 const session = document.querySelector('#sessionid').value;
 document.querySelectorAll('.template-var').forEach(e => e.remove());
+
+
+// build faq
+const faq = [
+    ['Why does gas prices are always showing 5 GWei? Is the service bugged?',
+    'It is perfectly fine. Binance Smart Chain gas prices are almost always 5 GWei. If ever the network becomes congested we should see a price spike.'],
+    ['My app have thousands of user requesting your service. Your API limit seems too low.',
+    'You should never call our API from the frond-end. Schedule your server retrieve information from our API from time to time, then when your users request it, just send your cached data to them.'],
+    ['Shouldn\'t I be worried users peek into my app source code and discover my API key?',
+    'Do not EVER expose your API key on the front-end. If you do so, your users can read your source code then make calls using your API (thus expending all your credits). Retrieve our data from your server back-end from time to time, then provide the cached data to your users when they request it.'],
+    ['My API key have been exposed. What should I do?',
+    'You can revoke your API key and generate a new one. Check our docs.'],
+];
+document.querySelector('#faq').innerHTML = `<ul>${faq.map(e => `<li><ul><li class="question"><i class="fas fa-angle-right"></i>${e[0]}</li><li class="answer">${e[1]}</li></ul></li>`).join('')}</ul>`;
+document.querySelectorAll('#faq .question').forEach(e => e.addEventListener('click', () => e.parentNode.classList.toggle('open')));

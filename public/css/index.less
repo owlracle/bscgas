@@ -406,6 +406,52 @@ body {
             font-family: monospace;
             font-size: 1rem;
         }
+
+        #faq {
+            ul {
+                list-style: none;
+                padding: 0;
+
+                li {
+                    padding: 2px 5px;
+                    border-radius: 3px;
+
+                    .question {
+                        cursor: pointer;
+                        transition: 0.3s all;
+
+                        &:hover {
+                            background-color: #00000030;
+                        }
+
+                        i {
+                            margin-right: 5px;
+                            transition: 0.3s all;
+                        }
+                    }
+
+                    .answer {
+                        opacity: 0;
+                        font-size: 0;
+                        transition: 0.3s all;
+                        color: #939393;
+                        padding-left: 25px;
+                    }
+                }
+            }
+
+            ul.open {
+                .question i {
+                    transform: rotate(90deg);
+                }
+
+                .answer {
+                    opacity: 1;
+                    font-size: 1rem;
+                }
+            }
+        }
+
     }
 
     footer {
@@ -1220,6 +1266,10 @@ body {
                 background-color: #3498db;
             }
         }
+    }
+
+    .grecaptcha-badge {
+        visibility: hidden;
     }
 }
 
