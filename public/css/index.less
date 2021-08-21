@@ -1074,7 +1074,7 @@ body {
                     }
                 }
     
-                .copy-container {
+                .input-container {
                     display: flex;
                     justify-content: space-between;
     
@@ -1082,8 +1082,13 @@ body {
                         flex-grow: 1;
                         border-radius: 3px 0 0 3px;
                     }
+
+                    #update.clicked i {
+                        transition: 0.7s transform;
+                        transform: rotate(360deg);
+                    }
     
-                    .copy {
+                    .input-button {
                         width: 35px;
                         display: flex;
                         align-items: center;

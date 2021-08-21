@@ -41,7 +41,7 @@ const corsOptions = {
 
 // manage session tokens
 const session = {
-    timeLimit: 1000 * 60, // 1 minute
+    timeLimit: 1000 * 60 * 10, // 10 minutes
     clients: {},
 
     create: function(){
@@ -316,9 +316,9 @@ app.post('/keys', async (req, res) => {
         };
     
         if (req.body.origin){
-            const match = req.body.origin.match(originRegex);
-            if (match && match.length > 1){
-                data.origin = match[1];
+            const origin = api.getOrigin(req.body.origin);
+            if (origin){
+                data.origin = origin;
             }
         }
         if (req.body.note){
@@ -945,13 +945,17 @@ const api = {
         return { result: row[0] };
     },
 
-    validateOrigin: async function(keyOrigin, reqOrigin){
+    getOrigin: function(origin){
         const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
+        const match = origin.match(originRegex);
+        return match && match[1] ? match[1] : false;
+    },
 
+    validateOrigin: async function(keyOrigin, reqOrigin){
         let originAllow = true;
         if (keyOrigin){
             if (reqOrigin){
-                const realOrigin = reqOrigin.match(originRegex)[1];
+                const realOrigin = this.getOrigin(reqOrigin);
                 if (keyOrigin != realOrigin){
                     originAllow = false;
                 }

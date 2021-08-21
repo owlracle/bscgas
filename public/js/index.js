@@ -657,6 +657,7 @@ const gasTimer = {
                 </div></div>`;
                 document.body.appendChild(fog);
                 fog.addEventListener('click', () => fog.remove());
+                fog.querySelector('#api-window').addEventListener('click', e => e.preventDefault());
                 fog.querySelector('#cancel').addEventListener('click', () => fog.remove());
                 fog.querySelector('#reload').addEventListener('click', () => window.location.reload());
             }
@@ -1080,7 +1081,13 @@ const api = {
 
                 let input = `<input type="text" class="input-text keys" id="input-${label}" value="${value}" readonly>`;
                 if (e[0] == 'wallet'){
-                    input = `<div class="copy-container">${input}<div class="copy"><i class="far fa-copy"></i></div></div>`;
+                    input = `<div class="input-container">${input}<div id="copy" class="input-button" title="Copy"><i class="far fa-copy"></i></div></div>`;
+                }
+                else if (e[0] == 'credit'){
+                    input = `<div class="input-container">${input}<div id="update" class="input-button" title="Update"><i class="fas fa-sync-alt"></i></div></div>`;
+                }
+                else if (e[0] == 'origin'){
+                    input = `<div class="input-container">${input}<a id="open-link" class="input-button" title="Open Link" href="https://${value}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i></a></div>`;
                 }
                 return `<p class="title">${label}</p>${input}`;
             }).join('');
@@ -1094,11 +1101,18 @@ const api = {
                 </div>
             </div>`;
 
-            modal.querySelector('.copy').addEventListener('click', function(){
-                const parent = this.closest('.copy-container');
+            modal.querySelector('#copy').addEventListener('click', function(){
+                const parent = this.closest('.input-container');
                 api.copyText(parent);
             });
-
+            
+            modal.querySelector('#update').addEventListener('click', function(){
+                this.classList.add('clicked');
+                setTimeout(() => this.classList.remove('clicked'), 700);
+                modal.querySelector('#input-credit').value = '...';
+                refreshCredit(key);
+            });
+            
             modal.querySelector('#credit').addEventListener('click', async () => {
                 const data = await this.getCredit(key);
                 this.showWindowCredit(key, data);
@@ -1537,14 +1551,14 @@ document.querySelectorAll('.template-var').forEach(e => e.remove());
 
 // build faq
 const faq = [
-    ['Why does gas prices are always showing 5 GWei? Is the service bugged?',
-    'It is perfectly fine. Binance Smart Chain gas prices are almost always 5 GWei. If ever the network becomes congested we should see a price spike.'],
-    ['My app have thousands of user requesting your service. Your API limit seems too low.',
-    'You should never call our API from the frond-end. Schedule your server retrieve information from our API from time to time, then when your users request it, just send your cached data to them.'],
-    ['Shouldn\'t I be worried users peek into my app source code and discover my API key?',
-    'Do not EVER expose your API key on the front-end. If you do so, your users can read your source code then make calls using your API (thus expending all your credits). Retrieve our data from your server back-end from time to time, then provide the cached data to your users when they request it.'],
-    ['My API key have been exposed. What should I do?',
-    'You can revoke your API key and generate a new one. Check our docs.'],
+    [`Why does gas prices are always showing 5 GWei? Is the service bugged?`,
+    `It is perfectly fine. Binance Smart Chain gas prices are almost always 5 GWei. If ever the network becomes congested we should see a price spike.`],
+    [`My app have thousands of user requesting bscgas service. The API limit seems too low.`,
+    `You should never call our API from the frond-end. Schedule your server to retrieve information at time intervals of your choice, then when your users request it, just send the cached data to them.`],
+    [`Shouldn't I be worried if users peek into my app's source-code and discover my API key?`,
+    `Do not EVER expose your API key on the front-end. If you do so, users will be able to read your source-code then make calls using your API (thus expending all your credits). Retrieve our data from your server back-end, then provide the cached data to your users when they request it.`],
+    [`My API key have been exposed. What should I do?`,
+    `You can revoke your API key and generate a new one <a onclick="document.querySelector('#manage-apikey').click()">clicking here</a>.`],
 ];
 document.querySelector('#faq').innerHTML = `<ul>${faq.map(e => `<li><ul><li class="question"><i class="fas fa-angle-right"></i>${e[0]}</li><li class="answer">${e[1]}</li></ul></li>`).join('')}</ul>`;
 document.querySelectorAll('#faq .question').forEach(e => e.addEventListener('click', () => e.parentNode.classList.toggle('open')));
