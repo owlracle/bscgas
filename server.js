@@ -11,7 +11,11 @@ const configFile = JSON.parse(fs.readFileSync(`${__dirname}/config.json`));
 
 const app = express();
 let port = 4200;
-let saveDB = true;
+
+const args = {
+    saveDB: true,
+    updateCredit: true,
+};
 
 const USAGE_LIMIT = 100;
 const REQUEST_COST = 10;
@@ -25,8 +29,14 @@ process.argv.forEach((val, index, array) => {
     if ((val == '-p' || val == '--port') && array[index+1]){
         port = array[index+1];
     }
+    if ((val == '-f' || val == '--force-production')){
+        configFile.production = true;
+    }
     if ((val == '-ns' || val == '--not-save')){
-        saveDB = false;
+        args.saveDB = false;
+    }
+    if ((val == '-uc' || val == '--update-credit')){
+        args.updateCredit = false;
     }
 });
 
@@ -73,7 +83,7 @@ app.get('/', (req, res) => {
         sessionid: new Session().getId(),
         usagelimit: USAGE_LIMIT,
         requestcost: REQUEST_COST,
-        recaptchakey: configFile.recaptcha[configFile.production ? 'prod' : 'dev'].key,
+        recaptchakey: configFile.recaptcha.key,
     });
 });
 
@@ -760,54 +770,6 @@ app.put('/credit/:key', async (req, res) => {
 
 // --- helper functions and objects ---
 
-async function requestOracle(){
-    try{
-        if (configFile.production){
-            return (await fetch('http://127.0.0.1:8097')).json();
-        }
-        return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));    
-    }
-    catch (error){
-        return { error: {
-            status: 500,
-            error: 'Internal Server Error',
-            message: 'Error while trying to fetch information from price oracle.',
-            serverMessage: error,
-        }};
-    }
-}
-
-// get prices to build database with price history
-async function buildHistory(){
-    try{
-        const data = await requestOracle();
-
-        if (data.standard){
-            const [rows, error] = await db.insert(`price_history`, {
-                instant: data.fastest,
-                fast: data.fast,
-                standard: data.standard,
-                slow: data.safeLow,
-            });
-            
-            if (error){
-                console.log(error);
-            }
-        }
-    }
-    catch (error) {
-        console.log(error);
-    }
-    finally {
-        setTimeout(() => buildHistory(), 1000 * 60); // 1 minute
-    }
-}
-
-if (saveDB && configFile.production){
-    buildHistory();
-}
-
-
 const db = {
     query: async function(sql) {
         return new Promise(resolve => this.connection.execute(sql, (error, rows) => resolve([rows, error])));
@@ -860,6 +822,109 @@ const db = {
     },
 };
 db.connection = mysql.createConnection(configFile.mysql);
+
+
+async function requestOracle(){
+    try{
+        if (configFile.production){
+            return (await fetch('http://127.0.0.1:8097')).json();
+        }
+        return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));    
+    }
+    catch (error){
+        return { error: {
+            status: 500,
+            error: 'Internal Server Error',
+            message: 'Error while trying to fetch information from price oracle.',
+            serverMessage: error,
+        }};
+    }
+}
+
+
+// get prices to build database with price history
+async function buildHistory(){
+    try{
+        const data = await requestOracle();
+
+        if (data.standard){
+            const [rows, error] = await db.insert(`price_history`, {
+                instant: data.fastest,
+                fast: data.fast,
+                standard: data.standard,
+                slow: data.safeLow,
+            });
+            
+            if (error){
+                console.log(error);
+            }
+        }
+    }
+    catch (error) {
+        console.log(error);
+    }
+    finally {
+        setTimeout(() => buildHistory(), 1000 * 60); // 1 minute
+    }
+}
+
+
+// update credit recharges and block height for all api keys
+async function updateAllCredit(){
+    const [rows, error] = await db.query(`SELECT * FROM api_keys`);
+    if (!error){
+        const blockHeight = await bscscan.getBlockHeight();
+        rows.forEach(async row => {
+            const id = row.id;
+            const wallet = row.wallet;
+            const block = row.blockChecked + 1;
+    
+            const data = {};
+            data.api_keys = { credit: row.credit };
+            data.api_keys.blockChecked = blockHeight;
+            
+            const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
+    
+            data.credit_recharges = {
+                tx: [],
+                value: [],
+                timestamp: [],
+                fromWallet: [],
+                apiKey: [],
+            };
+            
+            if (txs.status == "1"){
+                txs.result.forEach(tx => {
+                    if (tx.isError == "0" && tx.to.toLowerCase() == wallet.toLowerCase()){
+                        const value = parseInt(tx.value.slice(0,-10));
+                        data.api_keys.credit = parseInt(data.api_keys.credit) + value;
+    
+                        data.credit_recharges.tx.push(tx.hash);
+                        data.credit_recharges.value.push(value);
+                        data.credit_recharges.timestamp.push(parseInt(tx.timeStamp));
+                        data.credit_recharges.fromWallet.push(tx.from);
+                        data.credit_recharges.apiKey.push(id);
+                    }
+                })
+            }
+            
+            db.update('api_keys', data.api_keys, `id = ${id}`);
+            db.insert('credit_recharges', data.credit_recharges, { timestamp: `UNIX_TIMESTAMP({{}})` });
+        });
+    }
+
+    setTimeout(() => updateAllCredit(), 1000 * 60 * 60); // 1 hour
+}
+
+
+if (configFile.production){
+    if (args.saveDB){
+        buildHistory();
+    }
+    if (args.updateCredit){
+        updateAllCredit();
+    }
+}
 
 
 const bscscan = {
@@ -1096,8 +1161,7 @@ const api = {
 }
 
 async function verifyRecaptcha(token){
-    const mode = configFile.production ? 'prod' : 'dev';
-    const secret = configFile.recaptcha[mode].secret;
+    const secret = configFile.recaptcha.secret;
 
     try {
         const data = await fetch('https://www.google.com/recaptcha/api/siteverify', {
