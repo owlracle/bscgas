@@ -1301,7 +1301,7 @@ const limits = {
 };
 document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.USAGE_LIMIT);
 document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
-document.querySelector('#credit-bnb').innerHTML = `$${((await price.get()).now * 0.00000001).toFixed(10)}`;
+price.get().then(price => document.querySelector('#credit-bnb').innerHTML = `$${(price.now * 0.00000001).toFixed(10)}`);
 
 const dynamicSamples = {
     history: {
