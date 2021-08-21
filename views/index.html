@@ -186,7 +186,7 @@
 
         <p>When you access our endpoints, you need to be behind a public ip address or use an API key. In either case, you can request our data up to <code class="code inline request-limit"></code> times per hour for free. After reaching that limit, you can continue to make requests either waiting a few minutes or using your api credit.</p>
 
-        <h3>API keys window</h3>
+        <h3>API key management window</h3>
 
         <p>You can use the button below or the one <a href="#search">in the header</a> of this page to create, edit, and get information about your API keys. You can also use it to update your credit recharges in real-time.</p>
 
@@ -195,20 +195,18 @@
         <p>Please keep in mind that you should use your API key in your server's code, never in the front-end code, mainly because of these two reasons:
 
         <ul>
-            <li>Keys exposed in the front-end will enable users to look at your source-code, even if it is obfuscated, thus compromising your key.</li>
+            <li>Front-end code is publicly readable, even if obfuscated. Thus, writing your keys in the source-code will EXPOSE them.</li>
             <li>If used in the front-end, every user request will trigger a call to our endpoints. Depending on your app's traffic, that will make your API key consume the free calls per hour quickly, and beyond that your api credit.</li>
         </ul>
             
-        <p>You can make your calls to our endpoint in your server code, save the result in a file, then every time your users requests the information you could send the cached result. Remember to schedule calls to our endpoints at regular intervals to make sure your cached data is always up-to-date.</p>
+        <p>You can make your calls to our endpoint in your server code, save the result in a file or database, then every time your users request the information you could send the cached result. Remember to schedule calls to our endpoints at regular intervals to make sure your cached data is always up-to-date.</p>
 
         <h3>API Credit</h3>
 
         <p>After reaching the free request limit (<code class="code inline request-limit"></code> requests in the last hour), each new request will subtract <code class="code inline request-cost"></code> credits from your API account. Each credit is worth <code class="code inline">0.00000001 BNB</code> (around <code id="credit-bnb" class="code inline request-limit"></code> at current BNB price).</p>
         
-        <p>Any time you want to recharge your API credits, you can make a BNB transfer of any amount to your API wallet. After the transfer, our server will update your api credits automatically within one hour. If you want to be credited instantly, just keep the API key information window open, and the credits will be refreshed every five seconds.</p>
+        <p>Any time you want to recharge your API credits, you can make a BNB transfer of any amount to your API wallet. After the transfer, our server will update your api credits automatically within one hour. If you want to be credited instantly, you can click the update button on the API key information window.</p>
         
-        <p class="quote">To avoid unnecessary calls, and get informed about safety measures regarding your API keys, we strongly advise reading our <a href="#faq">FAQ</a>.</p>
-
 
         <h3>API key information</h3>
 
@@ -232,9 +230,9 @@
             <li><code class="code inline">usage</code>: The API key Usage:
                 <ul class="args">
                     <li><code class="code inline">apiKeyHour</code>: Requests made using your API key in the last hour.</li>
-                    <li><code class="code inline">ipHour</code>: Requests made using your your ip address in the last hour.</li>
+                    <li><code class="code inline">ipHour</code>: Requests made using your current ip address in the last hour.</li>
                     <li><code class="code inline">apiKeyTotal</code>: Total requests made using your API key.</li>
-                    <li><code class="code inline">ipTotal</code>: Total requests made using your ip address.</li>
+                    <li><code class="code inline">ipTotal</code>: Total requests made using your current ip address.</li>
                 </ul>
             </li>
         </ul> 
@@ -292,9 +290,13 @@
 
         <div id="codepen2"></div>
 
+        
         <h2>Frequently Asked Questions</h2>
 
         <div id="faq"></div>
+
+        <p>Didn't find what you were looking for? <a href="https://t.me/bscgas_info" target="_blank" rel="noopener">Ask us on telegram</a>.</p>
+
 
         <h2>Credits</h2>
 

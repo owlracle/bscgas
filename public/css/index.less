@@ -57,12 +57,20 @@ body {
         }
 
         ul {
+            padding-left: 15px;
+
+            @media @size-600 {
+                padding-left: 40px;
+            }
+
             &.args {
                 list-style: none;
+                margin-top: 10px;
             }
             
             li {
                 margin-bottom: 7px;
+                line-height: 1.2rem;
             }
         }
 
@@ -320,6 +328,8 @@ body {
             align-items: center;
             transition: 0.2s background ease-out;
             font-family: monospace;
+            flex-wrap: wrap;
+            word-break: break-all;
             
             &.clicked {
                 background-color: #00ff0020;
