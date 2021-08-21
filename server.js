@@ -40,30 +40,37 @@ const corsOptions = {
 
 
 // manage session tokens
-const session = {
-    timeLimit: 1000 * 60 * 10, // 10 minutes
-    clients: {},
+class Session {
+    static instances = {};
+    static timeLimit = 1000 * 60 * 10; // 10 minutes
 
-    create: function(){
-        const sid = uuidv4().split('-').join('');
-        this.refresh(sid);
-        return sid;
-    },
-
-    refresh: function(sid) {
-        clearTimeout(this.clients[sid]);
-        this.clients[sid] = setTimeout(() => delete this.clients[sid], this.timeLimit);
-    },
-
-    exists: function(sid){
-        return this.clients[sid] ? true : false;
+    static getInstance(sid) {
+        return Session.instances[sid] || false;
     }
-};
+
+    constructor() {
+        this.sid = uuidv4().split('-').join('');
+        Session.instances[this.sid] = this;
+        this.refresh();
+    }
+
+    getId() {
+        return this.sid;
+    }
+
+    refresh() {
+        if (this.timeout){
+            clearTimeout(this.timeout);
+        }
+        this.timeout = setTimeout(() => delete Session.instances[this.sid], Session.timeLimit);
+    }
+
+}
 
 
 app.get('/', (req, res) => {
     res.render(`index`, {
-        sessionid: session.create(),
+        sessionid: new Session().getId(),
         usagelimit: USAGE_LIMIT,
         requestcost: REQUEST_COST,
         recaptchakey: configFile.recaptcha[configFile.production ? 'prod' : 'dev'].key,
@@ -106,8 +113,8 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
 
     // request google recaptcha
     if (req.query.grc && req.query.sid) {
-        const sid = req.query.sid;
-        if (!session.exists(sid)){
+        const session = Session.getInstance(req.query.sid);
+        if (!session){
             res.status(401);
             res.send({
                 status: 401,
@@ -116,7 +123,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             });
             return;
         }
-        session.refresh(sid);
+        session.refresh();
 
         const rc = await verifyRecaptcha(req.query.grc);
         
@@ -208,8 +215,8 @@ app.get('/history', cors(corsOptions), async (req, res) => {
     };
 
     if (req.query.grc && req.query.sid) {
-        const sid = req.query.sid;
-        if (!session.exists(sid)){
+        const session = Session.getInstance(req.query.sid);
+        if (!session){
             res.status(401);
             res.send({
                 status: 401,
@@ -218,7 +225,7 @@ app.get('/history', cors(corsOptions), async (req, res) => {
             });
             return;
         }
-        session.refresh(sid);
+        session.refresh();
 
         const rc = await verifyRecaptcha(req.query.grc);
 
