@@ -68,11 +68,16 @@ class Session {
         return this.sid;
     }
 
+    getExpireAt() {
+        return this.expireAt;
+    }
+
     refresh() {
         if (this.timeout){
             clearTimeout(this.timeout);
         }
         this.timeout = setTimeout(() => delete Session.instances[this.sid], Session.timeLimit);
+        this.expireAt = new Date().getTime() + Session.timeLimit;
     }
 
 }
@@ -80,7 +85,6 @@ class Session {
 
 app.get('/', (req, res) => {
     res.render(`index`, {
-        sessionid: new Session().getId(),
         usagelimit: USAGE_LIMIT,
         requestcost: REQUEST_COST,
         recaptchakey: configFile.recaptcha.key,
@@ -765,6 +769,45 @@ app.put('/credit/:key', async (req, res) => {
             }
         }
     }
+});
+
+
+app.post('/session', async (req, res) => {
+    if (!req.body.grc) {
+        res.status(401);
+        res.send({
+            status: 401,
+            error: 'Unauthorized',
+            message: 'Your request did not send all the required fields.',
+        });
+        return;
+    }
+
+    const rc = await verifyRecaptcha(req.body.grc);
+    if (!rc.success || rc.score < 0.1){
+        res.status(401);
+        res.send({
+            status: 401,
+            error: 'Unauthorized',
+            message: 'Failed to verify recaptcha.',
+            serverMessage: rc
+        });
+        return;
+    }
+
+    const session = (() => {
+        if (req.body.currentSession){
+            const session = Session.getInstance(req.body.currentSession);
+            return session || new Session();
+        }
+        return new Session();
+    })();
+
+    res.send({
+        message: 'success',
+        sessionid: session.getId(),
+        expireAt: session.getExpireAt(),
+    });
 });
 
 

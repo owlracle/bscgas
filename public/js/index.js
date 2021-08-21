@@ -36,6 +36,38 @@ const recaptcha = {
 recaptcha.load();
 
 
+// set session id token
+const session = {
+    get: async function(){
+        if (this.isExpired()){
+            const body = { grc: await recaptcha.getToken() };
+            if (this.id){
+                body.currentSession = this.id;
+            }
+
+            const data = await (await fetch('/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            })).json();
+    
+            if (!data.error){
+                this.id = data.sessionid;
+                this.expireAt = data.expireAt;
+                return this.id;
+            }
+            return false;
+        }
+
+        return this.id;
+    },
+
+    isExpired: function() {
+        return this.expireAt ? new Date().getTime() > this.expireAt : true;
+    }
+};
+
+
 // load a custom script on window object
 class DynamicScript {
     constructor(url) {
@@ -268,9 +300,9 @@ const chart = {
 
     getHistory: async function(timeframe=60, page=1, candles=this.candles) {
         this.timeframe = timeframe;
-        // TODO: must resolve lack of apikey
+        const sessionid = await session.get();
         const token = await recaptcha.getToken();
-        this.history = await (await fetch(`/history?grc=${token}&sid=${session}&timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
+        this.history = await (await fetch(`/history?grc=${token}&sid=${sessionid}&timeframe=${timeframe}&page=${page}&candles=${candles}&to=${this.lastCandle}`)).json();
         if (this.history.error){
             console.log(this.history);
 
@@ -636,9 +668,10 @@ const gasTimer = {
     },
 
     update: async function() {
+        const sessionid = await session.get();
         const token = await recaptcha.getToken();
         const startTime = new Date();
-        const data = await (await fetch(`/gas?grc=${token}&sid=${session}`)).json();
+        const data = await (await fetch(`/gas?grc=${token}&sid=${sessionid}`)).json();
         const requestTime = new Date() - startTime;
 
         if (data.error){
@@ -1544,8 +1577,7 @@ new UrlBox(document.querySelector('#url-logs.url'), {
 });
 
 
-// set session
-const session = document.querySelector('#sessionid').value;
+// remove hidden inputs sent from server
 document.querySelectorAll('.template-var').forEach(e => e.remove());
 
 
