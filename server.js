@@ -17,7 +17,7 @@ const args = {
     updateCredit: true,
 };
 
-const USAGE_LIMIT = 100;
+const USAGE_LIMIT = 100000;
 const REQUEST_COST = 10;
 
 app.engine('html', mustacheExpress());

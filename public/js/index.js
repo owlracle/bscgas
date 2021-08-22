@@ -1033,19 +1033,19 @@ const api = {
             modal.innerHTML = `<div id="content">
                 <h2>API key Created</h2>
                 <p class="title">API Key</p>
-                <div class="copy-container">
+                <div class="input-container">
                     <input type="text" class="input-text keys" value="${data.apiKey}" readonly>
-                    <div class="copy"><i class="far fa-copy"></i></div>
+                    <div class="input-button"><i class="far fa-copy"></i></div>
                 </div>
                 <p class="title">API Secret</p>
-                <div class="copy-container">
+                <div class="input-container">
                     <input type="text" class="input-text keys" value="${data.secret}" readonly>
-                    <div class="copy"><i class="far fa-copy"></i></div>
+                    <div class="input-button"><i class="far fa-copy"></i></div>
                 </div>
                 <p class="title">Wallet</p>
-                <div class="copy-container">
+                <div class="input-container">
                     <input type="text" class="input-text keys" value="${data.wallet}" readonly>
-                    <div class="copy"><i class="far fa-copy"></i></div>
+                    <div class="input-button"><i class="far fa-copy"></i></div>
                 </div>
                 <ul>
                     <li>Make sure to save this information before closing this window.</li>
@@ -1057,8 +1057,8 @@ const api = {
 
             modal.querySelector('#close').addEventListener('click', () => modal.parentNode.remove());
 
-            modal.querySelectorAll('.copy').forEach(e => e.addEventListener('click', function(){
-                const parent = this.closest('.copy-container');
+            modal.querySelectorAll('.input-button').forEach(e => e.addEventListener('click', function(){
+                const parent = this.closest('.input-container');
                 api.copyText(parent);
             }));
         }

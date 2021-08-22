@@ -1,12 +1,16 @@
 {
     "bscscan": "BSCSCAN_API_KEY",
     "mysql": {
-        "user": "USER",
-        "host": "HOST",
-        "database": "DATABASE",
-        "password": "PASSWORD"
+        "user": "DB_USER",
+        "host": "DB_HOST",
+        "database": "DB_DATABASE",
+        "password": "DB_PASSWORD"
     },
     "production": true,
+    "telegram": {
+        "token": "TELEGRAM_BOT_TOKEN",
+        "chatId": "TELEGRAM_CHAT_ID"
+    },
     "recaptcha": {
         "key": "RECAPTCHA_KEY",
         "secret": "RECAPTCHA_SECRET"
