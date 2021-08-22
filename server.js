@@ -38,6 +38,10 @@ process.argv.forEach((val, index, array) => {
     if ((val == '-uc' || val == '--update-credit')){
         args.updateCredit = false;
     }
+    if (val == '-t' || val == '--test'){
+        configFile.production = false;
+        console.log('Production mode OFF');
+    }
 });
 
 app.use(express.urlencoded({ extended: true }));
@@ -347,7 +351,17 @@ app.post('/keys', async (req, res) => {
         }
 
         // get block height now so I know where to start looking for transactions
-        data.blockChecked = await bscscan.getBlockHeight();
+        data.blockChecked = parseInt(await bscscan.getBlockHeight());
+
+        if (isNaN(data.blockChecked)){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error getting network block height',
+                serverMessage: data.blockChecked,
+            });
+        }
 
         const [rows, error] = await db.insert('api_keys', data);
     
@@ -814,8 +828,34 @@ app.post('/session', async (req, res) => {
 // --- helper functions and objects ---
 
 const db = {
+    working: false,
+
     query: async function(sql) {
-        return new Promise(resolve => this.connection.execute(sql, (error, rows) => resolve([rows, error])));
+        return new Promise(resolve => this.connection.execute(sql, (error, rows) => {
+            if (error && error.fatal){
+                if (this.connection){
+                    this.connection.destroy();
+                }
+                // const content = [
+                //     'Disconnected',
+                //     new Date().toISOString(),
+                //     JSON.stringify(error),
+                // ];
+                // fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
+                
+                if (this.working){
+                    telegram.alert('Bscgas down!');
+                }
+                
+                this.working = false;
+
+                this.connect();
+                setTimeout(async () => resolve(await this.query(sql)), 1000);
+            }
+            else{
+                resolve([rows, error])
+            }
+        }));
     },
 
     // {field_1: 0, field_2: 'a'}
@@ -863,8 +903,31 @@ const db = {
         const sql = `UPDATE ${table} SET ${changesSql} WHERE ${filter}`;
         return this.query(sql);
     },
+
+    connect: function(){
+        if (!this.working){
+            this.connection = mysql.createConnection(configFile.mysql);
+    
+            this.connection.connect( opt => {
+                // const content = [
+                //     'Connected',
+                //     new Date().toISOString(),
+                //     JSON.stringify(opt),
+                // ];
+                // fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
+    
+                if (!opt){
+                    if (!this.working){
+                        telegram.alert('Bscgas Up!');
+                    }
+    
+                    this.working = true;
+                }
+            });
+        }
+    },
 };
-db.connection = mysql.createConnection(configFile.mysql);
+db.connect();
 
 
 async function requestOracle(){
@@ -976,7 +1039,7 @@ const bscscan = {
     getBlockHeight: async function() {
         const timeNow = (new Date().getTime() / 1000).toFixed(0);
         let block = await (await fetch(`https://api.bscscan.com/api?module=block&action=getblocknobytime&timestamp=${timeNow}&closest=before&apikey=${this.apiKey}`)).json();
-        return parseInt(block.result);
+        return block.result;
     },
 
     getTx: async function(wallet, from, to){
@@ -1217,5 +1280,24 @@ async function verifyRecaptcha(token){
     catch(error){
         console.log(error);
         return error;
+    }
+}
+
+const telegram = {
+    url: `https://api.telegram.org/bot{{token}}/sendMessage?chat_id={{chatId}}&text=`,
+
+    alert: async function(message){
+        if (!this.token){
+            this.token = configFile.telegram.token;
+            this.chatId = configFile.telegram.chatId;
+
+            this.url = this.url.replace(`{{token}}`, this.token).replace(`{{chatId}}`, this.chatId);
+        }
+        if (typeof message !== 'string'){
+            message = JSON.stringify(message);
+        }
+
+        const resp = configFile.production ? await (await fetch(this.url + encodeURIComponent(message))).json() : true;
+        return resp;
     }
 }
