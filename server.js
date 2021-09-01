@@ -29,18 +29,21 @@ process.argv.forEach((val, index, array) => {
     if ((val == '-p' || val == '--port') && array[index+1]){
         port = array[index+1];
     }
-    if ((val == '-f' || val == '--force-production')){
+    if ((val == '-P' || val == '--production')){
         configFile.production = true;
+        console.log('Mode set to Production');
     }
-    if ((val == '-ns' || val == '--not-save')){
+    if ((val == '-d' || val == '--development')){
+        configFile.production = true;
+        console.log('Mode set to Development');
+    }
+    if ((val == '-h' || val == '--history')){
         args.saveDB = false;
+        console.log('History will not be saved');
     }
-    if ((val == '-uc' || val == '--update-credit')){
+    if ((val == '-c' || val == '--credit')){
         args.updateCredit = false;
-    }
-    if (val == '-t' || val == '--test'){
-        configFile.production = false;
-        console.log('Production mode OFF');
+        console.log('Credit will not be updated');
     }
 });
 
@@ -207,7 +210,15 @@ app.get('/history', cors(corsOptions), async (req, res) => {
     
         const templateSpeed = speeds.map(speed => `(SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MIN(p.id)) as '${speed}.open', (SELECT p2.${speed} FROM price_history p2 WHERE p2.id = MAX(p.id)) as '${speed}.close', MIN(p.${speed}) as '${speed}.low', MAX(p.${speed}) as '${speed}.high'`).join(',');
         
-        const [rows, error] = await db.query(`SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN '${from || 0}' AND '${to || new Date().getTime() / 1000}' GROUP BY UNIX_TIMESTAMP(timestamp) DIV ${timeframe * 60} ORDER BY timestamp DESC LIMIT ${candles} OFFSET ${offset}`);
+        const sql = `SELECT MIN(p.timestamp) AS 'timestamp', ${templateSpeed}, count(p.id) AS 'samples' FROM price_history p WHERE UNIX_TIMESTAMP(timestamp) BETWEEN ? AND ? GROUP BY UNIX_TIMESTAMP(timestamp) DIV ? ORDER BY timestamp DESC LIMIT ? OFFSET ?`;
+        const data = [
+            from || 0,
+            to || new Date().getTime() / 1000,
+            timeframe * 60,
+            candles,
+            offset,
+        ];
+        const [rows, error] = await db.query(sql, data);
     
         if (error){
             return { error: {
@@ -416,7 +427,7 @@ app.put('/keys/:key', async (req, res) => {
         });
     }
     else {
-        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = ?`, [ key.slice(-4) ]);
 
         if (error){
             res.status(500);
@@ -465,7 +476,7 @@ app.put('/keys/:key', async (req, res) => {
                     res.send({ message: 'No information was changed.' });
                 }
                 else {
-                    const [rows, error] = await db.update('api_keys', data, `id = ${id}`);
+                    const [rows, error] = await db.update('api_keys', data, `?? = ?`, ['id', id]);
                     
                     if (error){
                         res.status(500);
@@ -508,7 +519,7 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
         });
     }
     else {
-        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = ?`, [ key.slice(-4) ]);
 
         if (error){
             res.status(500);
@@ -533,7 +544,11 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
             else {
                 const id = row[0].id;
 
-                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ${fromTime} AND UNIX_TIMESTAMP(timestamp) <= ${toTime} AND apiKey = '${id}' ORDER BY timestamp DESC`);
+                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ? AND UNIX_TIMESTAMP(timestamp) <= ? AND apiKey = ? ORDER BY timestamp DESC`, [
+                    fromTime,
+                    toTime,
+                    id,
+                ]);
 
                 if (error){
                     res.status(500);
@@ -567,7 +582,7 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
         });
     }
     else {
-        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`,);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = ?`, [ key.slice(-4) ]);
 
         if (error){
             res.status(500);
@@ -610,15 +625,18 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
                 const totalApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id}`;
                 let hourIp = 'SELECT 0';
                 let totalIp = 'SELECT 0';
+
+                const queryData = [];
     
                 if (req.header('x-real-ip')){
                     const ip = req.header('x-real-ip');
-                    hourIp = `SELECT count(*) FROM api_requests WHERE ip = '${ip}' AND timestamp >= now() - INTERVAL 1 HOUR`;
-                    totalIp = `SELECT count(*) FROM api_requests WHERE ip = '${ip}'`;
+                    hourIp = `SELECT count(*) FROM api_requests WHERE ip = ? AND timestamp >= now() - INTERVAL 1 HOUR`;
+                    totalIp = `SELECT count(*) FROM api_requests WHERE ip = ?`;
+                    queryData.push(ip, ip);
                 }
     
     
-                const [rows, error] = await db.query(`SELECT (${hourApi}) AS hourapi, (${hourIp}) AS hourip, (${totalApi}) AS totalapi, (${totalIp}) AS totalip`);
+                const [rows, error] = await db.query(`SELECT (${hourApi}) AS hourapi, (${hourIp}) AS hourip, (${totalApi}) AS totalapi, (${totalIp}) AS totalip`, queryData);
 
                 if (error){
                     res.status(500);
@@ -658,7 +676,7 @@ app.get('/credit/:key', cors(corsOptions), async (req, res) => {
         });
     }
     else {
-        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`,);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = ?`, [ key.slice(-4) ]);
 
         if (error){
             res.status(500);
@@ -681,7 +699,7 @@ app.get('/credit/:key', cors(corsOptions), async (req, res) => {
                 });
             }
             else {
-                const [rows, error] = await db.query(`SELECT tx, timestamp, value, fromWallet FROM credit_recharges WHERE apiKey = ${row[0].id} ORDER BY timestamp DESC`);
+                const [rows, error] = await db.query(`SELECT tx, timestamp, value, fromWallet FROM credit_recharges WHERE apiKey = ? ORDER BY timestamp DESC`, [ row[0].id ]);
 
                 if (error){
                     res.status(500);
@@ -718,7 +736,7 @@ app.put('/credit/:key', async (req, res) => {
         });
     }
     else {
-        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = '${key.slice(-4)}'`,);
+        const [rows, error] = await db.query(`SELECT * FROM api_keys WHERE peek = ?`, [ key.slice(-4) ]);
 
         if (error){
             res.status(500);
@@ -751,13 +769,15 @@ app.put('/credit/:key', async (req, res) => {
                 
                 const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
 
-                data.credit_recharges = {
-                    tx: [],
-                    value: [],
-                    timestamp: [],
-                    fromWallet: [],
-                    apiKey: [],
-                };
+                data.credit_recharges = {};
+                data.credit_recharges.fields = [
+                    'tx',
+                    'value',
+                    'timestamp',
+                    'fromWallet',
+                    'apiKey',
+                ];
+                data.credit_recharges.values = [];
                 
                 if (txs.status == "1"){
                     txs.result.forEach(tx => {
@@ -767,17 +787,19 @@ app.put('/credit/:key', async (req, res) => {
                             const value = parseInt(tx.value.slice(0,-10));
                             data.api_keys.credit = parseInt(data.api_keys.credit) + value;
 
-                            data.credit_recharges.tx.push(tx.hash);
-                            data.credit_recharges.value.push(value);
-                            data.credit_recharges.timestamp.push(parseInt(tx.timeStamp));
-                            data.credit_recharges.fromWallet.push(tx.from);
-                            data.credit_recharges.apiKey.push(id);
+                            data.credit_recharges.values.push([
+                                tx.hash,
+                                value,
+                                `UNIX_TIMESTAMP(${parseInt(tx.timeStamp)})`,
+                                tx.from,
+                                id
+                            ]);
                         }
                     })
                 }
                 
-                db.update('api_keys', data.api_keys, `id = ${id}`);
-                db.insert('credit_recharges', data.credit_recharges, { timestamp: `UNIX_TIMESTAMP({{}})` });
+                db.update('api_keys', data.api_keys, `?? = ?`, ['id', id]);
+                db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.fields.values);
 
                 res.send(txs);
             }
@@ -824,25 +846,22 @@ app.post('/session', async (req, res) => {
     });
 });
 
+// app.get('/test', async (req, res) => {
+//     const query = await db.insert('api_keys', {a: 1, b: 2});
+//     res.send(query);
+// });
 
 // --- helper functions and objects ---
 
 const db = {
     working: false,
 
-    query: async function(sql) {
-        return new Promise(resolve => this.connection.execute(sql, (error, rows) => {
+    query: async function(sql, data) {
+        return new Promise(resolve => this.connection.execute(this.connection.format(sql, data), (error, rows) => {
             if (error && error.fatal){
                 if (this.connection){
                     this.connection.destroy();
                 }
-                // const content = [
-                //     'Disconnected',
-                //     new Date().toISOString(),
-                //     JSON.stringify(error),
-                // ];
-                // fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
-                
                 if (this.working){
                     telegram.alert('Bscgas down!');
                 }
@@ -858,50 +877,35 @@ const db = {
         }));
     },
 
-    // {field_1: 0, field_2: 'a'}
-    // or
-    // {field_1: [0,1,2], field_2: ['a', 'b', 'c']}
-    // format is required if you want a field to be inserted in a format different than string.
-    //     you should inform an object:
-    //     { field_1: `prefix{{}}suffix` }
-    //     use {{}} to inform where the value will be inserted
-    insert: async function(table, obj, format){
-        let fields = Object.keys(obj);
-        const values = Object.values(obj).map(e => Array.isArray(e) ? e : [e]);
-
-        let valuesRow = [];
-        for (let f in values){
-            for (let e in values[f]){
-                if (valuesRow.length == e){
-                    valuesRow.push([]);
-                }
-                if (valuesRow[e].length == f){
-                    valuesRow[e].push([]);
-                }
-
-                let value = `'${values[f][e]}'`;
-                if (format && Object.keys(format).includes(fields[f])){
-                    const formatString = format[fields[f]].split('{{}}');
-                    value = [ formatString[0], values[f][e], formatString[1] ].join('');
-                }
-
-                valuesRow[e][f] = value;
-            }
+    insert: async function(table, fields, values){
+        // if sent object, convert to array
+        if (typeof fields === 'object' && !Array.isArray(fields)){
+            values = Object.values(fields);
+            fields = Object.keys(fields);
+        }
+        if (!Array.isArray(values[0])){
+            values = [values];
         }
 
-        fields = fields.join(',');
-        valuesRow = valuesRow.map(r => `(${ r.join(',') })`).join(',');
-        const sql = `INSERT INTO ${table} (${fields}) VALUES ${valuesRow}`;
+        const sql = `INSERT INTO ?? (??) VALUES ?`;
+        const data = [table, fields, values];
 
-        return this.query(sql);
+        return this.query(sql, data);
     },
 
-    // obj: {field_1: 0, field_2: 'a'}
-    // filter: sql text after WHERE
-    update: async function(table, obj, filter){
-        const changesSql = Object.entries(obj).map(e => `${e[0]} = '${e[1]}'`).join(',');
-        const sql = `UPDATE ${table} SET ${changesSql} WHERE ${filter}`;
-        return this.query(sql);
+    // test: async function(sql, data) {
+    //     return this.connection.format(sql, data)
+    // },
+
+    update: async function(table, fields, whereSql, whereData){
+        const data = [table, fields];
+        let where = '';
+        if (whereSql && whereData){
+            where = ` WHERE ${whereSql}`;
+            data.push(...whereData);
+        }
+        const sql = `UPDATE ?? SET ? ${where}`;
+        return this.query(sql, data);
     },
 
     connect: function(){
@@ -909,13 +913,6 @@ const db = {
             this.connection = mysql.createConnection(configFile.mysql);
     
             this.connection.connect( opt => {
-                // const content = [
-                //     'Connected',
-                //     new Date().toISOString(),
-                //     JSON.stringify(opt),
-                // ];
-                // fs.appendFile(`mysqlConnectionLog.csv`,  content.join(',') + '\n', () => {});
-    
                 if (!opt){
                     if (!this.working){
                         telegram.alert('Bscgas Up!');
@@ -991,31 +988,36 @@ async function updateAllCredit(){
             
             const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
     
-            data.credit_recharges = {
-                tx: [],
-                value: [],
-                timestamp: [],
-                fromWallet: [],
-                apiKey: [],
-            };
-            
+            data.credit_recharges = {};
+            data.credit_recharges.fields = [
+                'tx',
+                'value',
+                'timestamp',
+                'fromWallet',
+                'apiKey',
+            ];
+            data.credit_recharges.values = [];
+        
             if (txs.status == "1"){
                 txs.result.forEach(tx => {
                     if (tx.isError == "0" && tx.to.toLowerCase() == wallet.toLowerCase()){
                         const value = parseInt(tx.value.slice(0,-10));
                         data.api_keys.credit = parseInt(data.api_keys.credit) + value;
     
-                        data.credit_recharges.tx.push(tx.hash);
-                        data.credit_recharges.value.push(value);
-                        data.credit_recharges.timestamp.push(parseInt(tx.timeStamp));
-                        data.credit_recharges.fromWallet.push(tx.from);
-                        data.credit_recharges.apiKey.push(id);
+                        data.credit_recharges.values.push([
+                            tx.hash,
+                            value,
+                            `UNIX_TIMESTAMP(${parseInt(tx.timeStamp)})`,
+                            tx.from,
+                            id
+                        ]);
+
                     }
                 })
             }
             
-            db.update('api_keys', data.api_keys, `id = ${id}`);
-            db.insert('credit_recharges', data.credit_recharges, { timestamp: `UNIX_TIMESTAMP({{}})` });
+            db.update('api_keys', data.api_keys, `?? = ?`, ['id', id]);
+            db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.values);
         });
     }
 
@@ -1039,6 +1041,7 @@ const bscscan = {
     getBlockHeight: async function() {
         const timeNow = (new Date().getTime() / 1000).toFixed(0);
         let block = await (await fetch(`https://api.bscscan.com/api?module=block&action=getblocknobytime&timestamp=${timeNow}&closest=before&apikey=${this.apiKey}`)).json();
+        
         return block.result;
     },
 
@@ -1054,7 +1057,7 @@ const api = {
 
         if (ip) {
             // get usage from ip
-            const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE ip = '${ip}' AND timestamp > now() - INTERVAL 1 HOUR`);
+            const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE ip = ? AND timestamp > now() - INTERVAL 1 HOUR`, [ ip ]);
     
             if (error){
                 return { error: {
@@ -1081,7 +1084,7 @@ const api = {
             }
 
             // discorver usage from api key
-            const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = '${keyId}' AND timestamp > now() - INTERVAL 1 HOUR`);
+            const [rows, error] = await db.query(`SELECT count(*) AS total FROM api_requests WHERE apiKey = ? AND timestamp > now() - INTERVAL 1 HOUR`, [ keyId ]);
     
             if (error){
                 return { error: {
@@ -1099,7 +1102,7 @@ const api = {
     },
 
     getKeyInfo: async function(key){
-        const [rows, error] = await db.query(`SELECT id, apiKey, credit, origin FROM api_keys WHERE peek = '${key.slice(-4)}'`);
+        const [rows, error] = await db.query(`SELECT id, apiKey, credit, origin FROM api_keys WHERE peek = ?`, [ key.slice(-4) ]);
 
         if (error){
             return { error: {
@@ -1124,7 +1127,7 @@ const api = {
     },
 
     getOrigin: function(origin){
-        const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
+        const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,10})\b.*$/);
         const match = origin.match(originRegex);
         return match && match[1] ? match[1] : false;
     },
@@ -1178,7 +1181,7 @@ const api = {
         if (keyId && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
             // reduce credits
             credit -= REQUEST_COST;
-            const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ${keyId}`);
+            const [rows, error] = await db.update('api_keys', {credit: credit}, `?? = ?`, ['id', keyId]);
     
             if (error){
                 return { error: {
