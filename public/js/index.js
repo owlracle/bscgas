@@ -631,7 +631,7 @@ const tooltipList = [
     'Accepted on 90% of blocks',
     'Accepted on every block',
 ];
-document.querySelectorAll('.gas i').forEach((e,i) => {
+document.querySelectorAll('.gas i.fa-question-circle').forEach((e,i) => {
     new Tooltip(e, tooltipList[i]);
 });
 
