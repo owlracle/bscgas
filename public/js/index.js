@@ -1271,40 +1271,40 @@ const api = {
     },
 
     createKey: async function(body) {
-        return await (await fetch('/keys', {
+        return await this.request('/keys', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-        })).json();
+        });
     },
 
     editKey: async function(key, body) {
-        return await (await fetch(`/keys/${key}`, {
+        return await this.request(`/keys/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-        })).json();
+        });
     },
 
     getKey: async function(key) {
-        return await (await fetch(`/keys/${key}`, {
+        return await this.request(`/keys/${key}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     updateCredit: async function(key){
-        return await (await fetch(`/credit/${key}`, {
+        return await this.request(`/credit/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     getCredit: async function(key) {
-        return await (await fetch(`/credit/${key}`, {
+        return await this.request(`/credit/${key}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     getLogs: async function(key, fromTime, toTime) {
@@ -1317,10 +1317,10 @@ const api = {
         }
         options = Object.keys(options).length == 0 ? '' : '?' + Object.entries(options).map(([key, value]) => `${key}=${value}`).join('&');
 
-        return await (await fetch(`/logs/${key}${options}`, {
+        return await this.request(`/logs/${key}${options}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     copyText: function(parent){
@@ -1333,11 +1333,19 @@ const api = {
         navigator.clipboard.writeText(oldText);
     },
 
-    getLimits: async function(){
-        return await (await fetch(`/limits`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-        })).json();
+    request: async function(endpoint, options){
+        try {
+            const data = await (await fetch(endpoint, options)).json();
+
+            if (data.error){
+                console.log(data);
+            }
+            return data;
+        }
+        catch(error){
+            console.log(error);
+            return error;
+        }
     }
 };
 document.querySelector('#manage-apikey').addEventListener('click', () => api.showModal());
