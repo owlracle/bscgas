@@ -129,6 +129,10 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             resp.last_block = data.blockNum;
         }
 
+        if (!req.query.apikey){
+            resp.warning = 'Requests made without an api key will no longer be served starting 2021-09-20 00:00:00. Consider generating an api key and using on your future requests.';
+        }
+
         return resp;
     }
 
@@ -507,8 +511,6 @@ app.put('/keys/:key', async (req, res) => {
 // get api usage logs
 app.get('/logs/:key', cors(corsOptions), async (req, res) => {
     const key = req.params.key;
-    const toTime = req.query.totime || 'UNIX_TIMESTAMP(now())';
-    const fromTime = req.query.fromtime || `${toTime} - 3600`;
 
     if (!key.match(/^[a-f0-9]{32}$/)){
         res.status(400);
@@ -543,12 +545,16 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
             }
             else {
                 const id = row[0].id;
+                const toTime = req.query.totime || db.connection.raw('UNIX_TIMESTAMP(now())');
+                const fromTime = req.query.fromtime || (req.query.totime ? parseInt(req.query.totime) - 3600 : db.connection.raw('UNIX_TIMESTAMP(now()) - 3600'));
 
-                const [rows, error] = await db.query(`SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ? AND UNIX_TIMESTAMP(timestamp) <= ? AND apiKey = ? ORDER BY timestamp DESC`, [
+                const sql = `SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ? AND UNIX_TIMESTAMP(timestamp) <= ? AND apiKey = ? ORDER BY timestamp DESC`;
+                const sqlData = [
                     fromTime,
                     toTime,
                     id,
-                ]);
+                ];
+                const [rows, error] = await db.query(sql, sqlData);
 
                 if (error){
                     res.status(500);
@@ -768,7 +774,6 @@ app.put('/credit/:key', async (req, res) => {
                 data.api_keys.blockChecked = await bscscan.getBlockHeight();
                 
                 const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
-
                 data.credit_recharges = {};
                 data.credit_recharges.fields = [
                     'tx',
@@ -781,7 +786,7 @@ app.put('/credit/:key', async (req, res) => {
                 
                 if (txs.status == "1"){
                     txs.result.forEach(tx => {
-                        if (tx.isError == "0" && tx.to.toLowerCase() == wallet.toLowerCase()){
+                        if (tx.isError == "0" && value != '0' && tx.to.toLowerCase() == wallet.toLowerCase()){
                             // 33122453711370938 == 0.03312245371137 BNB
                             // const value = 50000000000;
                             const value = parseInt(tx.value.slice(0,-10));
@@ -790,7 +795,7 @@ app.put('/credit/:key', async (req, res) => {
                             data.credit_recharges.values.push([
                                 tx.hash,
                                 value,
-                                `UNIX_TIMESTAMP(${parseInt(tx.timeStamp)})`,
+                                db.connection.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
                                 tx.from,
                                 id
                             ]);
@@ -798,8 +803,10 @@ app.put('/credit/:key', async (req, res) => {
                     })
                 }
                 
-                db.update('api_keys', data.api_keys, `?? = ?`, ['id', id]);
-                db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.fields.values);
+                if (data.credit_recharges.values.length){
+                    db.update('api_keys', data.api_keys, `?? = ?`, ['id', id]);
+                    db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.values);
+                }
 
                 res.send(txs);
             }
@@ -894,6 +901,7 @@ const db = {
     },
 
     // test: async function(sql, data) {
+    //     console.log(this.connection.format(sql, data))
     //     return this.connection.format(sql, data)
     // },
 
@@ -1007,7 +1015,7 @@ async function updateAllCredit(){
                         data.credit_recharges.values.push([
                             tx.hash,
                             value,
-                            `UNIX_TIMESTAMP(${parseInt(tx.timeStamp)})`,
+                            db.connection.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
                             tx.from,
                             id
                         ]);
@@ -1047,6 +1055,8 @@ const bscscan = {
 
     getTx: async function(wallet, from, to){
         return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&endblock=${to}&apikey=${this.apiKey}`)).json();
+        // sample response
+        // return {"status":"1","message":"OK","result":[{"blockNumber":"10510811","timeStamp":"1630423588","hash":"0xc5b336f2bbeb0c684229f1d029c2773710707da8cd66b28d41ff893503c4a218","nonce":"508","blockHash":"0x48073bdbd34f7319576f11f7468a7ab718513f94031fbf27993733c91a25689f","transactionIndex":"242","from":"0x7f5d7e00d82dfeb7e83a0d4285cb21b31feab2b4","to":"0x0288d3e353fe2299f11ea2c2e1696b4a648ecc07","value":"0","gas":"66754","gasPrice":"5000000000","isError":"0","txreceipt_status":"1","input":"0x095ea7b3000000000000000000000000c946a04c1945a1516ed3cf07974ce8dbd4d19005ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","contractAddress":"","cumulativeGasUsed":"45436691","gasUsed":"44503","confirmations":"56642"}]}
     }
 };
 
