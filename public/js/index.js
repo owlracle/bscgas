@@ -206,9 +206,12 @@ const chart = {
         });
 
         document.querySelectorAll('#timeframe-switcher button').forEach(b => b.addEventListener('click', async () => {
-            const history = await this.getHistory(b.id.split('tf-')[1]);
             document.querySelectorAll('#timeframe-switcher button').forEach(e => e.classList.remove('active'));
-            b.classList.add('active')
+            const text = b.innerHTML;
+            b.innerHTML = `<i class="fas fa-spin fa-cog"></i>`;
+            const history = await this.getHistory(b.id.split('tf-')[1]);
+            b.classList.add('active');
+            b.innerHTML = text;
             this.update(history);
 
             document.querySelectorAll(`#toggle-container button`).forEach(b => {
