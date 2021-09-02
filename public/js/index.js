@@ -318,6 +318,7 @@ const chart = {
         return this.ready || new Promise(resolve => setTimeout(() => resolve(this.isReady()), 10));
     }
 };
+chart.init();
 
 
 // change theme dark/light
@@ -730,10 +731,8 @@ gasTimer.onUpdate = function(data, requestTime){
         sample.innerHTML = formatted;
         sample.classList.add('loaded');
 
-        chart.init().then(() => {
-            document.querySelector(`#timeframe-switcher #tf-60`).click();
-            document.querySelector(`#toggle-container #standard`).click();
-        });        
+        document.querySelector(`#timeframe-switcher #tf-60`).click();
+        document.querySelector(`#toggle-container #standard`).click();
     }
 }
 
@@ -752,6 +751,7 @@ function setColorGradient(elem, time){
     tooltipColor.setText(`API took ${(time/1000).toFixed(2)}s to respond`);
 
 }
+
 
 // codepen ID, fill divs with an embed codepen
 class CodePen {
@@ -794,6 +794,7 @@ const codePens = ['PomVooa', 'yLbZLeB'].map((v,i) => new CodePen(document.queryS
 //     });
 //     return response.json();
 // }
+
 
 const api = {
     regex: {
@@ -1350,6 +1351,7 @@ const api = {
 };
 document.querySelector('#manage-apikey').addEventListener('click', () => api.showModal());
 
+
 const limits = {
     REQUEST_COST: document.querySelector('#requestcost').value,
     USAGE_LIMIT: document.querySelector('#usagelimit').value,
@@ -1358,13 +1360,23 @@ document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.US
 document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
 price.get().then(price => document.querySelector('#credit-bnb').innerHTML = `$${(price.now * 0.00000001).toFixed(10)}`);
 
+
 const dynamicSamples = {
     history: {
         getData: async function(){
-            return await chart.getHistory(undefined, undefined, 1);
+            return await new Promise(resolve => {
+                const wait = () => {
+                    if (chart.history){
+                        resolve(chart.history);
+                        return;
+                    }
+                    setTimeout(() => wait(), 10);
+                }
+            });
         },
 
         update: function(data){
+            console.log( data)
             if (data.length){
                 const container = document.querySelector('#history-sample-container');
                 const content = Object.entries(data[0]).map(([key, value]) => {
@@ -1504,6 +1516,7 @@ const dynamicSamples = {
     },
 };
 dynamicSamples.update();
+
 
 class UrlBox {
     constructor(element, {
