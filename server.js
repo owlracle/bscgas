@@ -24,6 +24,15 @@ app.engine('html', mustacheExpress());
 app.set('view engine', 'html');
 app.set('views', __dirname + '/views');
 
+
+// read node env
+if (process.env.PORT){
+    port = process.env.PORT;
+}
+if (process.env.NODE_ENV){
+    configFile.production = process.env.NODE_ENV == 'production';
+}
+
 // receive args
 process.argv.forEach((val, index, array) => {
     if ((val == '-p' || val == '--port') && array[index+1]){
@@ -34,7 +43,7 @@ process.argv.forEach((val, index, array) => {
         console.log('Mode set to Production');
     }
     if ((val == '-d' || val == '--development')){
-        configFile.production = true;
+        configFile.production = false;
         console.log('Mode set to Development');
     }
     if ((val == '-h' || val == '--history')){
@@ -928,7 +937,7 @@ const db = {
 
     connect: function(){
         if (!this.working){
-            this.connection = mysql.createConnection(configFile.mysql);
+            this.connection = mysql.createPool(configFile.mysql);
     
             this.connection.getConnection( (err, conn) => {
                 if (!this.working){
