@@ -545,8 +545,8 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
             }
             else {
                 const id = row[0].id;
-                const toTime = req.query.totime || db.connection.raw('UNIX_TIMESTAMP(now())');
-                const fromTime = req.query.fromtime || (req.query.totime ? parseInt(req.query.totime) - 3600 : db.connection.raw('UNIX_TIMESTAMP(now()) - 3600'));
+                const toTime = req.query.totime || await db.raw('UNIX_TIMESTAMP(now())');
+                const fromTime = req.query.fromtime || (req.query.totime ? parseInt(req.query.totime) - 3600 : await db.raw('UNIX_TIMESTAMP(now()) - 3600'));
 
                 const sql = `SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ? AND UNIX_TIMESTAMP(timestamp) <= ? AND apiKey = ? ORDER BY timestamp DESC`;
                 const sqlData = [
@@ -785,7 +785,7 @@ app.put('/credit/:key', async (req, res) => {
                 data.credit_recharges.values = [];
                 
                 if (txs.status == "1"){
-                    txs.result.forEach(tx => {
+                    txs.result.forEach(async tx => {
                         if (tx.isError == "0" && value != '0' && tx.to.toLowerCase() == wallet.toLowerCase()){
                             // 33122453711370938 == 0.03312245371137 BNB
                             // const value = 50000000000;
@@ -795,7 +795,7 @@ app.put('/credit/:key', async (req, res) => {
                             data.credit_recharges.values.push([
                                 tx.hash,
                                 value,
-                                db.connection.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
+                                await db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
                                 tx.from,
                                 id
                             ]);
@@ -866,17 +866,17 @@ const db = {
     query: async function(sql, data) {
         return new Promise(resolve => this.connection.execute(this.connection.format(sql, data), (error, rows) => {
             if (error && error.fatal){
-                if (this.connection){
-                    this.connection.destroy();
-                }
                 if (this.working){
-                    telegram.alert('Bscgas down!');
+                    telegram.alert({
+                        message: 'Mysql error',
+                        error: error,
+                    });
                 }
                 
                 this.working = false;
 
                 this.connect();
-                setTimeout(async () => resolve(await this.query(sql)), 1000);
+                setTimeout(async () => resolve(await this.query(sql, data)), 1000);
             }
             else{
                 resolve([rows, error])
@@ -916,18 +916,27 @@ const db = {
         return this.query(sql, data);
     },
 
+    raw: async function(str){
+        return new Promise(resolve => {
+            this.connection.getConnection( (err, conn) => {
+                conn.raw(str);
+                resolve(conn.raw(str));
+                this.connection.releaseConnection(conn);
+            });
+        });
+    },
+
     connect: function(){
         if (!this.working){
             this.connection = mysql.createConnection(configFile.mysql);
     
-            this.connection.connect( opt => {
-                if (!opt){
-                    if (!this.working){
-                        telegram.alert('Bscgas Up!');
-                    }
-    
-                    this.working = true;
+            this.connection.getConnection( (err, conn) => {
+                if (!this.working){
+                    telegram.alert('Mysql connected');
                 }
+
+                this.working = true;
+                this.connection.releaseConnection(conn);
             });
         }
     },
@@ -1007,7 +1016,7 @@ async function updateAllCredit(){
             data.credit_recharges.values = [];
         
             if (txs.status == "1"){
-                txs.result.forEach(tx => {
+                txs.result.forEach(async tx => {
                     if (tx.isError == "0" && tx.to.toLowerCase() == wallet.toLowerCase()){
                         const value = parseInt(tx.value.slice(0,-10));
                         data.api_keys.credit = parseInt(data.api_keys.credit) + value;
@@ -1015,7 +1024,7 @@ async function updateAllCredit(){
                         data.credit_recharges.values.push([
                             tx.hash,
                             value,
-                            db.connection.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
+                            await db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
                             tx.from,
                             id
                         ]);
