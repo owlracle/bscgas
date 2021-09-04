@@ -206,9 +206,12 @@ const chart = {
         });
 
         document.querySelectorAll('#timeframe-switcher button').forEach(b => b.addEventListener('click', async () => {
-            const history = await this.getHistory(b.id.split('tf-')[1]);
             document.querySelectorAll('#timeframe-switcher button').forEach(e => e.classList.remove('active'));
-            b.classList.add('active')
+            const text = b.innerHTML;
+            b.innerHTML = `<i class="fas fa-spin fa-cog"></i>`;
+            const history = await this.getHistory(b.id.split('tf-')[1]);
+            b.classList.add('active');
+            b.innerHTML = text;
             this.update(history);
 
             document.querySelectorAll(`#toggle-container button`).forEach(b => {
@@ -318,6 +321,7 @@ const chart = {
         return this.ready || new Promise(resolve => setTimeout(() => resolve(this.isReady()), 10));
     }
 };
+chart.init();
 
 
 // change theme dark/light
@@ -631,7 +635,7 @@ const tooltipList = [
     'Accepted on 90% of blocks',
     'Accepted on every block',
 ];
-document.querySelectorAll('.gas i').forEach((e,i) => {
+document.querySelectorAll('.gas i.fa-question-circle').forEach((e,i) => {
     new Tooltip(e, tooltipList[i]);
 });
 
@@ -730,10 +734,8 @@ gasTimer.onUpdate = function(data, requestTime){
         sample.innerHTML = formatted;
         sample.classList.add('loaded');
 
-        chart.init().then(() => {
-            document.querySelector(`#timeframe-switcher #tf-60`).click();
-            document.querySelector(`#toggle-container #standard`).click();
-        });        
+        document.querySelector(`#timeframe-switcher #tf-60`).click();
+        document.querySelector(`#toggle-container #standard`).click();
     }
 }
 
@@ -752,6 +754,7 @@ function setColorGradient(elem, time){
     tooltipColor.setText(`API took ${(time/1000).toFixed(2)}s to respond`);
 
 }
+
 
 // codepen ID, fill divs with an embed codepen
 class CodePen {
@@ -794,6 +797,7 @@ const codePens = ['PomVooa', 'yLbZLeB'].map((v,i) => new CodePen(document.queryS
 //     });
 //     return response.json();
 // }
+
 
 const api = {
     regex: {
@@ -1271,40 +1275,40 @@ const api = {
     },
 
     createKey: async function(body) {
-        return await (await fetch('/keys', {
+        return await this.request('/keys', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-        })).json();
+        });
     },
 
     editKey: async function(key, body) {
-        return await (await fetch(`/keys/${key}`, {
+        return await this.request(`/keys/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-        })).json();
+        });
     },
 
     getKey: async function(key) {
-        return await (await fetch(`/keys/${key}`, {
+        return await this.request(`/keys/${key}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     updateCredit: async function(key){
-        return await (await fetch(`/credit/${key}`, {
+        return await this.request(`/credit/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     getCredit: async function(key) {
-        return await (await fetch(`/credit/${key}`, {
+        return await this.request(`/credit/${key}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     getLogs: async function(key, fromTime, toTime) {
@@ -1317,10 +1321,10 @@ const api = {
         }
         options = Object.keys(options).length == 0 ? '' : '?' + Object.entries(options).map(([key, value]) => `${key}=${value}`).join('&');
 
-        return await (await fetch(`/logs/${key}${options}`, {
+        return await this.request(`/logs/${key}${options}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-        })).json();
+        });
     },
 
     copyText: function(parent){
@@ -1333,14 +1337,23 @@ const api = {
         navigator.clipboard.writeText(oldText);
     },
 
-    getLimits: async function(){
-        return await (await fetch(`/limits`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-        })).json();
+    request: async function(endpoint, options){
+        try {
+            const data = await (await fetch(endpoint, options)).json();
+
+            if (data.error){
+                console.log(data);
+            }
+            return data;
+        }
+        catch(error){
+            console.log(error);
+            return error;
+        }
     }
 };
 document.querySelector('#manage-apikey').addEventListener('click', () => api.showModal());
+
 
 const limits = {
     REQUEST_COST: document.querySelector('#requestcost').value,
@@ -1350,13 +1363,23 @@ document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.US
 document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
 price.get().then(price => document.querySelector('#credit-bnb').innerHTML = `$${(price.now * 0.00000001).toFixed(10)}`);
 
+
 const dynamicSamples = {
     history: {
         getData: async function(){
-            return await chart.getHistory(undefined, undefined, 1);
+            return await new Promise(resolve => {
+                const wait = () => {
+                    if (chart.history){
+                        resolve(chart.history);
+                        return;
+                    }
+                    setTimeout(() => wait(), 10);
+                }
+            });
         },
 
         update: function(data){
+            console.log( data)
             if (data.length){
                 const container = document.querySelector('#history-sample-container');
                 const content = Object.entries(data[0]).map(([key, value]) => {
@@ -1496,6 +1519,7 @@ const dynamicSamples = {
     },
 };
 dynamicSamples.update();
+
 
 class UrlBox {
     constructor(element, {
