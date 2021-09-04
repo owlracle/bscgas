@@ -933,7 +933,7 @@ db.connect();
 async function requestOracle(){
     try{
         if (configFile.production){
-            return (await fetch('http://127.0.0.1:8097')).json();
+            return (await fetch('http://bscgas-oracle.tk')).json();
         }
         return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));    
     }
@@ -1124,7 +1124,7 @@ const api = {
     },
 
     getOrigin: function(origin){
-        const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/);
+        const originRegex = new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,10})\b.*$/);
         const match = origin.match(originRegex);
         return match && match[1] ? match[1] : false;
     },

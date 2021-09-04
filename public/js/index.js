@@ -797,7 +797,7 @@ const codePens = ['PomVooa', 'yLbZLeB'].map((v,i) => new CodePen(document.queryS
 
 const api = {
     regex: {
-        url: new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,6})\b.*$/),
+        url: new RegExp(/^(?:https?:\/\/)?(?:www\.)?([a-z0-9._-]{1,256}\.[a-z0-9]{1,10})\b.*$/),
         apiKey: new RegExp(/^[a-f0-9]{32}$/),
     },
 
