@@ -489,7 +489,7 @@ app.put('/keys/:key', async (req, res) => {
                     res.send({ message: 'No information was changed.' });
                 }
                 else {
-                    const [rows, error] = await db.update('api_keys', data, `?? = ?`, ['id', id]);
+                    const [rows, error] = await db.update('api_keys', data, `id = ?`, [id]);
                     
                     if (error){
                         res.status(500);
@@ -813,7 +813,7 @@ app.put('/credit/:key', async (req, res) => {
                 }
                 
                 if (data.credit_recharges.values.length){
-                    db.update('api_keys', data.api_keys, `?? = ?`, ['id', id]);
+                    db.update('api_keys', data.api_keys, `id = ?`, [id]);
                     db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.values);
                 }
 
@@ -863,7 +863,7 @@ app.post('/session', async (req, res) => {
 });
 
 // app.get('/test', async (req, res) => {
-//     const query = await db.insert('api_keys', {a: 1, b: 2});
+//     const query = await db.update('api_keys', {a: 1, b: 2}, 'id = ?', [2]);
 //     res.send(query);
 // });
 
@@ -873,7 +873,7 @@ const db = {
     working: false,
 
     query: async function(sql, data) {
-        return new Promise(resolve => this.connection.execute(this.connection.format(sql, data), (error, rows) => {
+        return new Promise(resolve => this.connection.execute(sql, data, (error, rows) => {
             if (error && error.fatal){
                 if (this.working){
                     telegram.alert({
@@ -899,14 +899,9 @@ const db = {
             values = Object.values(fields);
             fields = Object.keys(fields);
         }
-        if (!Array.isArray(values[0])){
-            values = [values];
-        }
 
-        const sql = `INSERT INTO ?? (??) VALUES ?`;
-        const data = [table, fields, values];
-
-        return this.query(sql, data);
+        const sql = `INSERT INTO ${table} (${fields.join(',')}) VALUES (${values.map(() => '?').join(',')})`;
+        return this.query(sql, values);
     },
 
     // test: async function(sql, data) {
@@ -915,13 +910,17 @@ const db = {
     // },
 
     update: async function(table, fields, whereSql, whereData){
-        const data = [table, fields];
+        const fielsdSql = Object.keys(fields).map(e => `${e} = ?`).join(', ');
+        fields = Object.values(fields);
+
+        const data = fields;
         let where = '';
         if (whereSql && whereData){
-            where = ` WHERE ${whereSql}`;
+            where = `WHERE ${whereSql}`;
             data.push(...whereData);
         }
-        const sql = `UPDATE ?? SET ? ${where}`;
+        const sql = `UPDATE ${table} SET ${fielsdSql} ${where}`;
+        // console.log(this.connection.format(sql, data));
         return this.query(sql, data);
     },
 
@@ -1042,7 +1041,7 @@ async function updateAllCredit(){
                 })
             }
             
-            db.update('api_keys', data.api_keys, `?? = ?`, ['id', id]);
+            db.update('api_keys', data.api_keys, `id = ?`, [id]);
             db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.values);
         });
     }
@@ -1209,7 +1208,7 @@ const api = {
         if (keyId && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
             // reduce credits
             credit -= REQUEST_COST;
-            const [rows, error] = await db.update('api_keys', {credit: credit}, `?? = ?`, ['id', keyId]);
+            const [rows, error] = await db.update('api_keys', {credit: credit}, `id = ?`, [keyId]);
     
             if (error){
                 return { error: {
