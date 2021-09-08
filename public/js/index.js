@@ -1360,8 +1360,8 @@ const limits = {
     USAGE_LIMIT: document.querySelector('#usagelimit').value,
 };
 document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.USAGE_LIMIT);
-document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
-price.get().then(price => document.querySelector('#credit-bnb').innerHTML = `$${(price.now * 0.00000001).toFixed(10)}`);
+document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST * 0.00000001 + ' BNB');
+price.get().then(price => document.querySelector('#credit-bnb').innerHTML = `$${(price.now * limits.REQUEST_COST * 0.00000001).toFixed(10)}`);
 
 
 const dynamicSamples = {
