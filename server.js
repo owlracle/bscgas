@@ -17,7 +17,7 @@ const args = {
     updateCredit: true,
 };
 
-const USAGE_LIMIT = 100000;
+const USAGE_LIMIT = 100;
 const REQUEST_COST = 10;
 
 app.engine('html', mustacheExpress());
@@ -1219,15 +1219,14 @@ const api = {
     },
 
     authorizeKey: function(key, ip, usage, credit){
-        // TODO: block !key requests in the future
-        if (!key && usage.ip >= USAGE_LIMIT){
+        if (!key){
             return { error: {
-                status: 403,
-                error: 'Forbidden',
-                message: 'You have reached the ip address request limit. Try using an API key.'
+                status: 401,
+                error: 'Unauthorized',
+                message: 'You must provide an api key for this action.'
             }};
         }
-        else if (key && credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
+        else if (credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
             return { error: {
                 status: 403,
                 error: 'Forbidden',
