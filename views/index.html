@@ -42,7 +42,7 @@
             <a id="logo" href="/"><img src="img/logo.png" alt="Bscgas logo"></a>
             <div id="price"><div>BNB: $<span id="now">000.00</span></div><span id="color" class="green">(<span id="before">+0.00</span>%)</span></div>
             <a id="buy-bnb" href="https://www.binance.com/en/register?ref=88450796" target="_blank" rel="noopener"><img
-                    src="https://public.bnbstatic.com/static/images/common/favicon.ico" alt="binance logo">Buy BNB</a>
+                    src="img/binance.ico" alt="binance logo">Buy BNB</a>
         </div>
         <div class="col">
             <div id="theme"></div>
@@ -214,9 +214,9 @@
 
         <h3>API Credit</h3>
 
-        <p>After reaching the free request limit (<code class="code inline request-limit"></code> requests in the last hour), each new request will subtract <code class="code inline request-cost"></code> credits from your API account. Each credit is worth <code class="code inline">0.00000001 BNB</code> (around <code id="credit-bnb" class="code inline request-limit"></code> at current BNB price).</p>
+        <p>After reaching the free request limit (<code class="code inline request-limit"></code> requests in the last hour), each new request will subtract <code class="code inline request-cost"></code> (around <code id="credit-bnb" class="code inline request-limit"></code> at current BNB price).</p>
         
-        <p>Any time you want to recharge your API credits, you can make a BNB transfer of any amount to your API wallet. After the transfer, our server will update your api credits automatically within one hour. If you want to be credited instantly, you can click the update button on the API key information window.</p>
+        <p>Any time you want to recharge your API credit, you can make a BNB transfer of any amount to your API wallet. After the transfer, our server will update your api credit automatically within one hour. If you want to be credited instantly, you can click the update button on the API key information window.</p>
         
 
         <h3>API key information</h3>
@@ -234,8 +234,8 @@
         <ul class="args">
             <li><code class="code inline">apiKey</code>: Your API key.</li>
             <li><code class="code inline">creation</code>: An ISO 8601 compliant date for the time the API key was created.</li>
-            <li><code class="code inline">wallet</code>: Your API wallet. You should transfer BNB to this address to recharge your credits.</li>
-            <li><code class="code inline">credit</code>: The amount of your unspent credits.</li>
+            <li><code class="code inline">wallet</code>: Your API wallet. You should transfer BNB to this address to recharge your credit.</li>
+            <li><code class="code inline">credit</code>: The amount of your unspent credit (<code class="code inline">1 credit = 0.00000001 BNB</code>).</li>
             <li><code class="code inline">origin</code>: Your requests will only be processed if the request's origin match your API key origin field. This field will not be present if you did not fill an origin when creating the API key.</li>
             <li><code class="code inline">note</code>: A personal informative note about the key. This field will only be present if you filled a note when creating your key.</li>
             <li><code class="code inline">usage</code>: The API key Usage:
@@ -264,8 +264,8 @@
         <ul class="args">
             <li><code class="code inline">tx</code>: The transaction hash of your deposit. You can check <a href="https://bscscan.com/" target="_blank" rel="noopener">Bscscan</a> for details about the transaction.</li>
             <li><code class="code inline">timestamp</code>: An ISO 8601 compliant date for the time of the transaction.</li>
-            <li><code class="code inline">value</code>: Credits deposited. <code class="code inline">1 credit = 0.00000001 BNB</code>.</li>
-            <li><code class="code inline">fromWallet</code>: The wallet that sent the credits to your API wallet.</li>
+            <li><code class="code inline">value</code>: Credit deposited. <code class="code inline">1 credit = 0.00000001 BNB</code>.</li>
+            <li><code class="code inline">fromWallet</code>: The wallet that sent the credit to your API wallet.</li>
         </ul> 
 
 
@@ -334,14 +334,15 @@
                         src="https://bscscan.com//images/favicon.ico" alt="bscscan logo"><span>BSC scan</span><span class="gray">(BSC block
                         explorer)</span></a>
                 <a class="item" href="https://www.binance.com/" target="_blank" rel="noopener"><img
-                        src="https://public.bnbstatic.com/static/images/common/favicon.ico" alt="binance logo"><span>Binance</span><span
+                        src="img/binance.ico" alt="binance logo"><span>Binance</span><span
                         class="gray">(Buy BNB with fiat)</span></a>
-                <a class="item" href="https://pancakeswap.finance/" target="_blank" rel="noopener"><img
-                        src="https://pancakeswap.finance//favicon.ico" alt="pancakeswap logo"><span>Pancakeswap</span><span class="gray">(Dex
+                <!-- <a class="item" href="https://pancakeswap.finance/" target="_blank" rel="noopener"><img
+                        src="https://pancakeswap.finance/favicon.ico" alt="pancakeswap logo"><span>Pancakeswap</span><span class="gray">(Dex
                         exchange)</span></a>
                 <a class="item" href="https://www.beefy.finance/" target="_blank" rel="noopener"><img
                         src="https://beefy.finance/favicon.ico" alt="beefy finance logo"><span>Beefy.finance</span><span class="gray">(BSC yield
-                        farming)</span></a>
+                        farming)</span></a> -->
+                <a class="item" href="https://t.me/bscgas_info" target="_blank" rel="noopener"><i class="fas fa-handshake"></i><span><b>Want your project here?</b></span><span class="gray">(Contact us)</span></a>
             </div>
             <div class="col">
                 <div class="row title">Social</div>

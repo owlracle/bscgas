@@ -1360,8 +1360,8 @@ const limits = {
     USAGE_LIMIT: document.querySelector('#usagelimit').value,
 };
 document.querySelectorAll('.request-limit').forEach(e => e.innerHTML = limits.USAGE_LIMIT);
-document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST);
-price.get().then(price => document.querySelector('#credit-bnb').innerHTML = `$${(price.now * 0.00000001).toFixed(10)}`);
+document.querySelectorAll('.request-cost').forEach(e => e.innerHTML = limits.REQUEST_COST * 0.00000001 + ' BNB');
+price.get().then(price => document.querySelector('#credit-bnb').innerHTML = `$${(price.now * limits.REQUEST_COST * 0.00000001).toFixed(7)}`);
 
 
 const dynamicSamples = {
@@ -1614,9 +1614,11 @@ const faq = [
     [`Shouldn't I be worried if users peek into my app's source-code and discover my API key?`,
     `Do not EVER expose your API key on the front-end. If you do so, users will be able to read your source-code then make calls using your API (thus expending all your credits). Retrieve our data from your server back-end, then provide the cached data to your users when they request it.`],
     [`My API key have been exposed. What should I do?`,
-    `You can revoke your API key and generate a new one <a onclick="document.querySelector('#manage-apikey').click()">clicking here</a>.`],
+    `You can reset your API key hash and generate a new one <a id="link-reset-key">clicking here</a>.`],
     [`I want to make a recharge. Where can I find my API wallet?`,
     `Your API wallet can be found in the <a onclick="document.querySelector('#manage-apikey').click()">API management window</a>. To add credits to your account, just make a BNB transfer of any amount to your API wallet. Use the management window to update your balance and keep track of your recharge history.`],
 ];
 document.querySelector('#faq').innerHTML = `<ul>${faq.map(e => `<li><ul><li class="question"><i class="fas fa-angle-right"></i>${e[0]}</li><li class="answer">${e[1]}</li></ul></li>`).join('')}</ul>`;
 document.querySelectorAll('#faq .question').forEach(e => e.addEventListener('click', () => e.parentNode.classList.toggle('open')));
+
+document.querySelector('#link-reset-key').addEventListener('click', () => api.showModal('edit'));

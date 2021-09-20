@@ -17,7 +17,7 @@ const args = {
     updateCredit: true,
 };
 
-const USAGE_LIMIT = 100000;
+const USAGE_LIMIT = 100;
 const REQUEST_COST = 10;
 
 app.engine('html', mustacheExpress());
@@ -863,8 +863,7 @@ app.post('/session', async (req, res) => {
 });
 
 // app.get('/test', async (req, res) => {
-//     const query = await db.update('api_keys', {a: 1, b: 2}, 'id = ?', [2]);
-//     res.send(query);
+//     res.send(await bscscan.getBNBBalance());
 // });
 
 // --- helper functions and objects ---
@@ -1074,6 +1073,41 @@ const bscscan = {
         return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&endblock=${to}&apikey=${this.apiKey}`)).json();
         // sample response
         // return {"status":"1","message":"OK","result":[{"blockNumber":"10510811","timeStamp":"1630423588","hash":"0xc5b336f2bbeb0c684229f1d029c2773710707da8cd66b28d41ff893503c4a218","nonce":"508","blockHash":"0x48073bdbd34f7319576f11f7468a7ab718513f94031fbf27993733c91a25689f","transactionIndex":"242","from":"0x7f5d7e00d82dfeb7e83a0d4285cb21b31feab2b4","to":"0x0288d3e353fe2299f11ea2c2e1696b4a648ecc07","value":"0","gas":"66754","gasPrice":"5000000000","isError":"0","txreceipt_status":"1","input":"0x095ea7b3000000000000000000000000c946a04c1945a1516ed3cf07974ce8dbd4d19005ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","contractAddress":"","cumulativeGasUsed":"45436691","gasUsed":"44503","confirmations":"56642"}]}
+    },
+
+    getBNBBalance: async function() {
+        const [rows, error] = await db.query(`SELECT wallet FROM api_keys`);
+        if (error){
+            res.status(500);
+            res.send({
+                status: 500,
+                error: 'Internal Server Error',
+                message: 'Error searching for wallets.',
+                serverMessage: error,
+            });
+            return;
+        }
+
+        const wallets = rows.map(row => row.wallet);
+        const balance = [];
+
+        const call = async (sliced) => {
+            return new Promise(resolve => setTimeout(async () => {
+                resolve(await (await fetch(`https://api.bscscan.com/api?module=account&action=balancemulti&address=${sliced.join(',')}&tag=latest&apikey=${this.apiKey}`)).json());
+            }, 1500));
+        }
+
+        for (let i=0 ; i < parseInt(wallets.length / 20) + 1 ; i++){
+            const sliced = wallets.slice(i*20, (i+1)*20);
+            const result = await call(sliced);
+            console.log(result)
+
+            if (result.status == '1'){
+                result.result.forEach(e => balance.push([e.account, e.balance]));
+            }
+        }
+
+        return Object.fromEntries(balance);
     }
 };
 
@@ -1185,15 +1219,14 @@ const api = {
     },
 
     authorizeKey: function(key, ip, usage, credit){
-        // TODO: block !key requests in the future
-        if (!key && usage.ip >= USAGE_LIMIT){
+        if (!key){
             return { error: {
-                status: 403,
-                error: 'Forbidden',
-                message: 'You have reached the ip address request limit. Try using an API key.'
+                status: 401,
+                error: 'Unauthorized',
+                message: 'You must provide an api key for this action.'
             }};
         }
-        else if (key && credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
+        else if (credit < 0 && (usage.apiKey >= USAGE_LIMIT || usage.ip >= USAGE_LIMIT)){
             return { error: {
                 status: 403,
                 error: 'Forbidden',
