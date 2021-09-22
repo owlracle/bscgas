@@ -554,10 +554,10 @@ app.get('/logs/:key', cors(corsOptions), async (req, res) => {
             }
             else {
                 const id = row[0].id;
-                const toTime = req.query.totime || await db.raw('UNIX_TIMESTAMP(now())');
-                const fromTime = req.query.fromtime || (req.query.totime ? parseInt(req.query.totime) - 3600 : await db.raw('UNIX_TIMESTAMP(now()) - 3600'));
+                const toTime = req.query.totime || db.raw('UNIX_TIMESTAMP(now())');
+                const fromTime = req.query.fromtime || (req.query.totime ? parseInt(req.query.totime) - 3600 : db.raw('UNIX_TIMESTAMP(now()) - 3600'));
 
-                const sql = `SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ? AND UNIX_TIMESTAMP(timestamp) <= ? AND apiKey = ? ORDER BY timestamp DESC`;
+                const sql = `SELECT ip, origin, timestamp FROM api_requests WHERE UNIX_TIMESTAMP(timestamp) >= ? AND UNIX_TIMESTAMP(timestamp) <= ? AND apiKey = ? ORDER BY timestamp DESC LIMIT 10000`;
                 const sqlData = [
                     fromTime,
                     toTime,
@@ -638,20 +638,21 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
     
                 const hourApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id} AND timestamp >= now() - INTERVAL 1 HOUR`;
                 const totalApi = `SELECT count(*) FROM api_requests WHERE apiKey = ${id}`;
-                let hourIp = 'SELECT 0';
-                let totalIp = 'SELECT 0';
+                // let hourIp = 'SELECT 0';
+                // let totalIp = 'SELECT 0';
 
                 const queryData = [];
     
-                if (req.header('x-real-ip')){
-                    const ip = req.header('x-real-ip');
-                    hourIp = `SELECT count(*) FROM api_requests WHERE ip = ? AND timestamp >= now() - INTERVAL 1 HOUR`;
-                    totalIp = `SELECT count(*) FROM api_requests WHERE ip = ?`;
-                    queryData.push(ip, ip);
-                }
+                // if (req.header('x-real-ip')){
+                //     const ip = req.header('x-real-ip');
+                //     hourIp = `SELECT count(*) FROM api_requests WHERE ip = ? AND timestamp >= now() - INTERVAL 1 HOUR`;
+                //     totalIp = `SELECT count(*) FROM api_requests WHERE ip = ?`;
+                //     queryData.push(ip, ip);
+                // }
     
     
-                const [rows, error] = await db.query(`SELECT (${hourApi}) AS hourapi, (${hourIp}) AS hourip, (${totalApi}) AS totalapi, (${totalIp}) AS totalip`, queryData);
+                // const [rows, error] = await db.query(`SELECT (${hourApi}) AS hourapi, (${hourIp}) AS hourip, (${totalApi}) AS totalapi, (${totalIp}) AS totalip`, queryData);
+                const [rows, error] = await db.query(`SELECT (${hourApi}) AS hourapi, (${totalApi}) AS totalapi`, queryData);
 
                 if (error){
                     res.status(500);
@@ -665,11 +666,11 @@ app.get('/keys/:key', cors(corsOptions), async (req, res) => {
                 else {
                     data.usage = {
                         apiKeyHour: rows[0].hourapi,
-                        ipHour: rows[0].hourip,
+                        // ipHour: rows[0].hourip,
                         apiKeyTotal: rows[0].totalapi,
-                        ipTotal: rows[0].totalip,
+                        // ipTotal: rows[0].totalip,
                     };
-        
+
                     res.send(data);
                 }
             }
@@ -804,7 +805,7 @@ app.put('/credit/:key', async (req, res) => {
                             data.credit_recharges.values.push([
                                 tx.hash,
                                 value,
-                                await db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
+                                db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
                                 tx.from,
                                 id
                             ]);
@@ -872,6 +873,8 @@ const db = {
     working: false,
 
     query: async function(sql, data) {
+        [sql, data] = this.formatRaw(sql, data);
+        // console.log(this.connection.format(sql, data));
         return new Promise(resolve => this.connection.execute(sql, data, (error, rows) => {
             if (error && error.fatal){
                 if (this.working){
@@ -923,14 +926,27 @@ const db = {
         return this.query(sql, data);
     },
 
-    raw: async function(str){
-        return new Promise(resolve => {
-            this.connection.getConnection( (err, conn) => {
-                conn.raw(str);
-                resolve(conn.raw(str));
-                this.connection.releaseConnection(conn);
-            });
+    raw: function(str){
+        return { toSqlString: () => str };
+    },
+
+    formatRaw: function(sql, data){
+        const pieces = sql.split('?');
+        let join = pieces.shift();
+        
+        data.forEach(d => {
+            if (d.toSqlString){
+                join += d.toSqlString();
+            }
+            else{
+                join += '?';
+            }
+            join += pieces.shift();
         });
+
+        sql = join;
+        data = data.filter(e => !e.toSqlString);
+        return [sql, data];
     },
 
     connect: function(){
@@ -1031,7 +1047,7 @@ async function updateAllCredit(){
                         data.credit_recharges.values.push([
                             tx.hash,
                             value,
-                            await db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
+                            db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
                             tx.from,
                             id
                         ]);
