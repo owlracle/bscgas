@@ -426,10 +426,10 @@ document.querySelector('#search #api-info').addEventListener('click', async () =
         api.showModal();
         api.showWindowInfo(data);
 
-        glyph.classList.remove('fa-spin', 'fa-cog');    
-        glyph.classList.add('fa-search');
-        input.removeAttribute('disabled');
     }
+    glyph.classList.remove('fa-spin', 'fa-cog');    
+    glyph.classList.add('fa-search');
+    input.removeAttribute('disabled');
     input.value = '';
 });
 
