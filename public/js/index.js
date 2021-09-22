@@ -413,12 +413,22 @@ setInterval(() => price.update(), 10000); // update every 10s
 // search api key button
 
 document.querySelector('#search #api-info').addEventListener('click', async () => {
+    const glyph = document.querySelector('#search #api-info i');
+    glyph.classList.remove('fa-search');
+    glyph.classList.add('fa-spin', 'fa-cog');
+
     const input = document.querySelector('#search input');
+    input.setAttribute('disabled', true);
+
     const key = input.value.trim().toLowerCase();
     if (key.match(api.regex.apiKey)){
         const data = await api.getKey(key);
         api.showModal();
         api.showWindowInfo(data);
+
+        glyph.classList.remove('fa-spin', 'fa-cog');    
+        glyph.classList.add('fa-search');
+        input.removeAttribute('disabled');
     }
     input.value = '';
 });

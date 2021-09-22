@@ -754,9 +754,14 @@ body {
                     color: var(--text-intense-color);
                     outline: none;
                     width: 120px;
+                    transition: 0.3s color;
                     
                     @media @size-900 {
                         width: 240px;
+                    }
+
+                    &:disabled {
+                        color: #939393;
                     }
                 }
                 
