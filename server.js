@@ -775,49 +775,8 @@ app.put('/credit/:key', async (req, res) => {
                 });
             }
             else {
-                const id = row[0].id;
-                const wallet = row[0].wallet;
-                const block = row[0].blockChecked + 1;
-
-                const data = {};
-                data.api_keys = { credit: row[0].credit };
-                data.api_keys.blockChecked = await bscscan.getBlockHeight();
-                
-                const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
-                data.credit_recharges = {};
-                data.credit_recharges.fields = [
-                    'tx',
-                    'value',
-                    'timestamp',
-                    'fromWallet',
-                    'apiKey',
-                ];
-                data.credit_recharges.values = [];
-                
-                if (txs.status == "1"){
-                    txs.result.forEach(async tx => {
-                        if (tx.isError == "0" && value != '0' && tx.to.toLowerCase() == wallet.toLowerCase()){
-                            // 33122453711370938 == 0.03312245371137 BNB
-                            // const value = 50000000000;
-                            const value = parseInt(tx.value.slice(0,-10));
-                            data.api_keys.credit = parseInt(data.api_keys.credit) + value;
-
-                            data.credit_recharges.values.push([
-                                tx.hash,
-                                value,
-                                db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
-                                tx.from,
-                                id
-                            ]);
-                        }
-                    })
-                }
-                
-                if (data.credit_recharges.values.length){
-                    db.update('api_keys', data.api_keys, `id = ?`, [id]);
-                    db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.values);
-                }
-
+                const blockHeight = await bscscan.getBlockHeight();
+                const txs = await api.updateCredit(row[0], blockHeight);
                 res.send(txs);
             }
         }
@@ -874,8 +833,10 @@ const db = {
 
     query: async function(sql, data) {
         [sql, data] = this.formatRaw(sql, data);
+        // console.log(sql, data);
         // console.log(this.connection.format(sql, data));
         return new Promise(resolve => this.connection.execute(sql, data, (error, rows) => {
+            // console.log(error)
             if (error && error.fatal){
                 if (this.working){
                     telegram.alert({
@@ -902,8 +863,14 @@ const db = {
             fields = Object.keys(fields);
         }
 
-        const sql = `INSERT INTO ${table} (${fields.join(',')}) VALUES (${values.map(() => '?').join(',')})`;
-        return this.query(sql, values);
+        // if sent multiple rows to be inserted
+        if (Array.isArray(values[0]) && values[0].length == fields.length){
+            return Promise.all(values.map(value => this.insert(table, fields, value)));
+        }
+        else {
+            let sql = `INSERT INTO ${table} (${fields.join(',')}) VALUES (${values.map(() => '?').join(',')})`;
+            return this.query(sql, values);
+        }
     },
 
     // test: async function(sql, data) {
@@ -932,20 +899,24 @@ const db = {
 
     formatRaw: function(sql, data){
         const pieces = sql.split('?');
-        let join = pieces.shift();
-        
-        data.forEach(d => {
-            if (d.toSqlString){
-                join += d.toSqlString();
-            }
-            else{
-                join += '?';
-            }
-            join += pieces.shift();
-        });
 
-        sql = join;
-        data = data.filter(e => !e.toSqlString);
+        if (pieces.length > 1){
+            let join = pieces.shift();
+            
+            data.forEach(d => {
+                if (d.toSqlString){
+                    join += d.toSqlString();
+                }
+                else{
+                    join += '?';
+                }
+                join += pieces.shift();
+            });
+    
+            sql = join;
+            data = data.filter(e => !e.toSqlString);
+        }
+        
         return [sql, data];
     },
 
@@ -1018,46 +989,7 @@ async function updateAllCredit(){
     if (!error){
         const blockHeight = await bscscan.getBlockHeight();
         rows.forEach(async row => {
-            const id = row.id;
-            const wallet = row.wallet;
-            const block = row.blockChecked + 1;
-    
-            const data = {};
-            data.api_keys = { credit: row.credit };
-            data.api_keys.blockChecked = blockHeight;
-            
-            const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
-    
-            data.credit_recharges = {};
-            data.credit_recharges.fields = [
-                'tx',
-                'value',
-                'timestamp',
-                'fromWallet',
-                'apiKey',
-            ];
-            data.credit_recharges.values = [];
-        
-            if (txs.status == "1"){
-                txs.result.forEach(async tx => {
-                    if (tx.isError == "0" && tx.to.toLowerCase() == wallet.toLowerCase()){
-                        const value = parseInt(tx.value.slice(0,-10));
-                        data.api_keys.credit = parseInt(data.api_keys.credit) + value;
-    
-                        data.credit_recharges.values.push([
-                            tx.hash,
-                            value,
-                            db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
-                            tx.from,
-                            id
-                        ]);
-
-                    }
-                })
-            }
-            
-            db.update('api_keys', data.api_keys, `id = ?`, [id]);
-            db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.values);
+            api.updateCredit(row, blockHeight);
         });
     }
 
@@ -1086,6 +1018,7 @@ const bscscan = {
     },
 
     getTx: async function(wallet, from, to){
+        // console.log(wallet, from, to)
         return await (await fetch(`https://api.bscscan.com/api?module=account&action=txlist&address=${wallet}&startblock=${from}&endblock=${to}&apikey=${this.apiKey}`)).json();
         // sample response
         // return {"status":"1","message":"OK","result":[{"blockNumber":"10510811","timeStamp":"1630423588","hash":"0xc5b336f2bbeb0c684229f1d029c2773710707da8cd66b28d41ff893503c4a218","nonce":"508","blockHash":"0x48073bdbd34f7319576f11f7468a7ab718513f94031fbf27993733c91a25689f","transactionIndex":"242","from":"0x7f5d7e00d82dfeb7e83a0d4285cb21b31feab2b4","to":"0x0288d3e353fe2299f11ea2c2e1696b4a648ecc07","value":"0","gas":"66754","gasPrice":"5000000000","isError":"0","txreceipt_status":"1","input":"0x095ea7b3000000000000000000000000c946a04c1945a1516ed3cf07974ce8dbd4d19005ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","contractAddress":"","cumulativeGasUsed":"45436691","gasUsed":"44503","confirmations":"56642"}]}
@@ -1113,6 +1046,7 @@ const bscscan = {
             }, 1500));
         }
 
+        // we can call 20 at time from bscscan
         for (let i=0 ; i < parseInt(wallets.length / 20) + 1 ; i++){
             const sliced = wallets.slice(i*20, (i+1)*20);
             const result = await call(sliced);
@@ -1343,6 +1277,53 @@ const api = {
 
         return rows;
     },
+
+    updateCredit: async function({id, wallet, blockChecked, credit}, blockHeight){
+        const block = blockChecked + 1;
+
+        const data = {};
+        data.api_keys = { credit: credit };
+        data.api_keys.blockChecked = blockHeight;
+        
+        const txs = await bscscan.getTx(wallet, block, data.api_keys.blockChecked);
+
+        data.credit_recharges = {};
+        data.credit_recharges.fields = [
+            'tx',
+            'value',
+            'timestamp',
+            'fromWallet',
+            'apiKey',
+        ];
+        data.credit_recharges.values = [];
+    
+        if (txs.status == "1"){
+            txs.result.forEach(async tx => {
+                if (tx.isError == "0" && tx.to.toLowerCase() == wallet.toLowerCase()){
+                    // 33122453711370938 == 0.03312245371137 BNB
+                    // const value = 50000000000;
+                    const value = parseInt(tx.value.slice(0,-10));
+                    data.api_keys.credit = parseInt(data.api_keys.credit) + value;
+
+                    data.credit_recharges.values.push([
+                        tx.hash,
+                        value,
+                        db.raw(`FROM_UNIXTIME(${tx.timeStamp})`),
+                        tx.from,
+                        id
+                    ]);
+
+                }
+            })
+        }
+        
+        db.update('api_keys', data.api_keys, `id = ?`, [id]);
+        if (data.credit_recharges.values.length){
+            db.insert('credit_recharges', data.credit_recharges.fields, data.credit_recharges.values);
+        }
+
+        return txs;
+    }
 }
 
 async function verifyRecaptcha(token){
