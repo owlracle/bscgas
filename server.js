@@ -941,7 +941,30 @@ db.connect();
 async function requestOracle(){
     try{
         if (configFile.production){
-            return (await fetch('http://bscgas-oracle.tk')).json();
+            const data = await (await fetch('http://owlracle.tk:8080/bsc')).json();
+
+            if (data.minGwei) {
+                const avgTime = (data.timestamp.slice(-1)[0] - data.timestamp[0]) / (data.timestamp.length - 1);
+
+                // sort gwei array ascending so I can pick directly by index
+                const sortedGwei = data.minGwei.sort((a, b) => parseFloat(a) - parseFloat(b));
+
+                const accept = [35, 60, 90, 100];
+                const speeds = accept.map(speed => {
+                    // get gwei corresponding to the slice of the array
+                    const poolIndex = parseInt(speed / 100 * data.minGwei.length) - 1;
+                    return sortedGwei[poolIndex];
+                });
+
+                return {
+                    safeLow: speeds[0],
+                    standard: speeds[1],
+                    fast: speeds[2],
+                    fastest: speeds[3],
+                    block_time: avgTime,
+                    blockNum: data.lastBlock,
+                };
+            }
         }
         return new Promise(resolve => resolve({"safeLow":5.0,"standard":5.0,"fast":5.0,"fastest":5.0,"block_time":15,"blockNum":7499408}));    
     }
