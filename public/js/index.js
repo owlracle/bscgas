@@ -1632,3 +1632,6 @@ document.querySelector('#faq').innerHTML = `<ul>${faq.map(e => `<li><ul><li clas
 document.querySelectorAll('#faq .question').forEach(e => e.addEventListener('click', () => e.parentNode.classList.toggle('open')));
 
 document.querySelector('#link-reset-key').addEventListener('click', () => api.showModal('edit'));
+
+
+document.querySelector('#owlracle-info #close').addEventListener('click', function() { fadeOut(this.parentNode).then(() => this.parentNode.remove()) });

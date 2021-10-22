@@ -1343,5 +1343,60 @@ body {
     .grecaptcha-badge {
         visibility: hidden;
     }
+
+    #owlracle-info {
+        position: fixed;
+        width: 100vw;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2;
+        
+        #message {
+            background-color: #000000eb;
+            color: white;
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            max-width: 100%;
+            border-radius: 5px;
+            box-shadow: 2px 2px 5px black;
+            padding: 10px 15px;
+            font-size: 1.3rem;
+            
+            @media @size-600 {
+                padding: 25px 50px;
+            }
+            
+            img {
+                height: 60px;
+                margin-right: 25px;
+            }
+
+            a {
+                margin-left: 5px;
+                color: #2689cc;
+            }
+        }
+
+        #close {
+            color: #e12b2b;
+            align-self: flex-start;
+            margin-top: -40px;
+            font-size: 1.5rem;
+            transition: 0.3s all;
+            cursor: pointer;
+            margin: -5px 0px 0 -20px;
+            
+            @media @size-600 {
+                margin: -5px 20px 0 -20px;
+            }
+
+            &:hover {
+                filter: brightness(130%);
+            }
+        }
+    }
 }
 
