@@ -136,10 +136,7 @@ app.get('/gas', cors(corsOptions), async (req, res) => {
             resp.instant = data.fastest;
             resp.block_time = data.block_time;
             resp.last_block = data.blockNum;
-        }
-
-        if (!req.query.apikey){
-            resp.warning = 'Requests made without an api key will no longer be served starting 2021-09-20 00:00:00. Consider generating an api key and using on your future requests.';
+            resp.warning = 'Bscgas requests will soon be redirected to Owlracle. Be an early owl and migrate right now to get $5 worth of credits. Know more at https://owlracle.info';
         }
 
         return resp;
