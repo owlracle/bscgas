@@ -722,7 +722,8 @@ gasTimer.onUpdate = function(data, requestTime){
     const speedList = ['slow', 'standard', 'fast', 'instant'];
     document.querySelectorAll('.gas .body').forEach((e,i) => {
         if (data[speedList[i]]){
-            e.querySelector('.gwei').innerHTML = `${data[speedList[i]]} GWei`;
+            const gas = (gas => gas.toFixed(gas == parseInt(gas) ? 0 : 2))(data[speedList[i]]);
+            e.querySelector('.gwei').innerHTML = `${gas} GWei`;
             // e.querySelector('.usd').innerHTML = `$${data[speedList[i]] * 0.000000001}`;
         }
     });
