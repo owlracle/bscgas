@@ -1,3 +1,5 @@
+## This repo is not maintained anymore. My new project, [Owlracle](https://github.com/owlracle/webserver), is an improved and actively maintained alternative. If you liked bscgas check our repo and also our [website](https://owlracle.info).
+
 # Bscgas
 
 We provide information about gas prices on Binance Smart Chain network.
