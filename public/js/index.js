@@ -1221,7 +1221,7 @@ const api = {
             <h2>API recharge history</h2>
             <p id="key-show">${key}</p>
             ${txs}
-            <p id="missing">Missing tx? <a href="https://t.me/bscgas_info" target="_blank">contact us</a>!</p>
+            <p id="missing">Missing tx? <a href="https://t.me/owlracle" target="_blank">contact us</a>!</p>
             <div id="button-container"><button id="close">Close</button></div>
         </div>`;
         
